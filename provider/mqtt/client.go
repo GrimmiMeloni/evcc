@@ -6,16 +6,11 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/util"
-)
-
-const (
-	connectTimeout = 2 * time.Second
-	publishTimeout = 2 * time.Second
+	"github.com/evcc-io/evcc/util/request"
 )
 
 // Instance is the paho Mqtt client singleton
@@ -75,7 +70,7 @@ func NewClient(log *util.Logger, broker, user, password, clientID string, qos by
 	options.SetAutoReconnect(true)
 	options.SetOnConnectHandler(mc.ConnectionHandler)
 	options.SetConnectionLostHandler(mc.ConnectionLostHandler)
-	options.SetConnectTimeout(connectTimeout)
+	options.SetConnectTimeout(request.Timeout)
 
 	if insecure {
 		options.SetTLSConfig(&tls.Config{InsecureSkipVerify: true})
@@ -126,10 +121,8 @@ func (m *Client) ConnectionHandler(client paho.Client) {
 func (m *Client) Publish(topic string, retained bool, payload interface{}) error {
 	m.log.TRACE.Printf("send %s: '%v'", topic, payload)
 	token := m.Client.Publish(topic, m.Qos, retained, payload)
-	if token.WaitTimeout(publishTimeout) {
-		return token.Error()
-	}
-	return api.ErrTimeout
+	go m.WaitForToken("send", topic, token)
+	return nil
 }
 
 // Listen validates uniqueness and registers and attaches listener
@@ -158,19 +151,21 @@ func (m *Client) listen(topic string) {
 		m.log.TRACE.Printf("recv %s: '%v'", topic, payload)
 		if len(payload) > 0 {
 			m.mux.Lock()
-			for _, cb := range m.listener[topic] {
-				go cb(payload)
-			}
+			callbacks := m.listener[topic]
 			m.mux.Unlock()
+
+			for _, cb := range callbacks {
+				cb(payload)
+			}
 		}
 	})
-	m.WaitForToken("subscribe", topic, token)
+	go m.WaitForToken("subscribe", topic, token)
 }
 
 // WaitForToken synchronously waits until token operation completed
 func (m *Client) WaitForToken(action, topic string, token paho.Token) {
 	err := api.ErrTimeout
-	if token.WaitTimeout(publishTimeout) {
+	if token.WaitTimeout(request.Timeout) {
 		err = token.Error()
 	}
 	if err != nil {

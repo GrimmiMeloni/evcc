@@ -196,7 +196,7 @@ func (c *Easee) connect(ts oauth2.TokenSource) func() (signalr.Connection, error
 		ctx, cancel := context.WithTimeout(context.Background(), request.Timeout)
 		defer cancel()
 
-		return signalr.NewHTTPConnection(ctx, "https://api.easee.cloud/hubs/chargers",
+		return signalr.NewHTTPConnection(ctx, "https://streams.easee.com/hubs/chargers",
 			signalr.WithHTTPClient(c.Client),
 			signalr.WithHTTPHeaders(func() (res http.Header) {
 				return http.Header{
@@ -415,8 +415,12 @@ func (c *Easee) MaxCurrent(current int64) error {
 	uri := fmt.Sprintf("%s/chargers/%s/settings", easee.API, c.charger)
 	resp, err := c.Post(uri, request.JSONContent, request.MarshalJSON(data))
 	if err == nil {
-		c.current = cur
 		resp.Body.Close()
+		if resp.StatusCode == 202 && resp.ContentLength <= 2 {
+			// no tick id, Easee effectively ignored this update
+			return api.ErrMustRetry
+		}
+		c.current = cur
 	}
 
 	return err
