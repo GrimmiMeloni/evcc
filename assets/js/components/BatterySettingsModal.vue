@@ -298,23 +298,25 @@ export default {
 			if (!Array.isArray(this.battery)) {
 				return;
 			}
-			return this.battery.map(({ soc, capacity }) => {
-				const multipleBatteries = this.battery.length > 1;
-				const energy = this.fmtKWh(
-					(capacity / 100) * soc * 1e3,
-					true,
-					!multipleBatteries,
-					1
-				);
-				const total = this.fmtKWh(capacity * 1e3, true, true, 1);
-				const name = multipleBatteries ? "↳ " : "";
-				const formattedSoc = multipleBatteries ? ` (${this.fmtSoc(soc)})` : "";
-				const formattedEnergy = this.$t("batterySettings.capacity", {
-					energy,
-					total,
+			return this.battery
+				.filter(({ capacity }) => capacity > 0)
+				.map(({ soc, capacity }) => {
+					const multipleBatteries = this.battery.length > 1;
+					const energy = this.fmtKWh(
+						(capacity / 100) * soc * 1e3,
+						true,
+						!multipleBatteries,
+						1
+					);
+					const total = this.fmtKWh(capacity * 1e3, true, true, 1);
+					const name = multipleBatteries ? "↳ " : "";
+					const formattedSoc = multipleBatteries ? ` (${this.fmtSoc(soc)})` : "";
+					const formattedEnergy = this.$t("batterySettings.capacity", {
+						energy,
+						total,
+					});
+					return `${name}${formattedEnergy}${formattedSoc}`;
 				});
-				return `${name}${formattedEnergy}${formattedSoc}`;
-			});
 		},
 	},
 	watch: {
@@ -352,7 +354,9 @@ export default {
 		changePrioritySoc($event) {
 			const value = parseInt($event.target.value, 10);
 			if (value > this.bufferSoc) {
+				const startOption = this.bufferStartOption;
 				this.saveBufferSoc(value);
+				this.setBufferStart(startOption);
 			} else {
 				this.savePrioritySoc(value);
 			}

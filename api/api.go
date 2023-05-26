@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -39,6 +41,18 @@ const (
 	StatusE    ChargeStatus = "E" // Fzg. angeschlossen:   ja    Laden aktiv: nein    - Fehler (Kurzschluss)
 	StatusF    ChargeStatus = "F" // Fzg. angeschlossen:   ja    Laden aktiv: nein    - Fehler (Ausfall Wallbox)
 )
+
+// ChargeStatusString converts a string to ChargeStatus
+func ChargeStatusString(s string) (ChargeStatus, error) {
+	switch status := strings.ToUpper(s); status {
+	case "A", "B", "C":
+		return ChargeStatus(status), nil
+	case "D", "E", "F":
+		return ChargeStatus(status), fmt.Errorf("invalid status: %s", status)
+	default:
+		return StatusNone, fmt.Errorf("invalid status: %s", s)
+	}
+}
 
 // String implements Stringer
 func (c ChargeStatus) String() string {
