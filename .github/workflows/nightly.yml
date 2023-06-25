@@ -54,7 +54,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: refs/heads/master # force master
           fetch-depth: 0
           persist-credentials: false
 
