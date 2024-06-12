@@ -32,7 +32,7 @@ jobs:
       ${{ needs.check_date.outputs.should_run != 'false' }}
       && startsWith(github.ref, 'refs/heads/master')
       && ! contains(github.head_ref, 'refs/heads/chore/')
-    uses: evcc-io/evcc/.github/workflows/default.yml@master
+    uses: grimmimeloni/evcc/.github/workflows/default.yml@master
 
   docker:
     name: Publish Docker :nightly
@@ -43,7 +43,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refs/heads/master # force master
           fetch-depth: 0
 
       - name: Get dist from cache
@@ -71,7 +70,7 @@ jobs:
           build-args: |
             TESLA_CLIENT_ID=${{ secrets.TESLA_CLIENT_ID }}
           tags: |
-            evcc/evcc:nightly
+            grimmimeloni/evcc:${{ github.ref_name }}
 
   apt:
     name: Publish APT nightly
