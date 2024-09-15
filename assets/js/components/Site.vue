@@ -29,6 +29,8 @@
 				:tariffGrid="tariffGrid"
 				:tariffCo2="tariffCo2"
 				:currency="currency"
+				:gridConfigured="gridConfigured"
+				:pvConfigured="pvConfigured"
 			/>
 			<Footer v-bind="footer"></Footer>
 		</div>
@@ -70,7 +72,8 @@ export default {
 		batteryPower: Number,
 		batterySoc: Number,
 		batteryDischargeControl: Boolean,
-		batterySmartCostLimit: Number,
+		batteryGridChargeLimit: { type: Number, default: null },
+		batteryGridChargeActive: Boolean,
 		batteryMode: String,
 		battery: Array,
 		gridCurrents: Array,
@@ -99,7 +102,6 @@ export default {
 		uploadProgress: Number,
 		sponsor: { type: Object, default: () => ({}) },
 		smartCostType: String,
-		smartCostActive: Boolean,
 		fatal: Object,
 	},
 	computed: {

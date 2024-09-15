@@ -6,7 +6,13 @@
 			@change-vehicle="changeVehicle"
 			@remove-vehicle="removeVehicle"
 		/>
-		<VehicleStatus v-bind="vehicleStatus" class="mb-2" />
+		<VehicleStatus
+			v-bind="vehicleStatus"
+			class="mb-2"
+			@open-loadpoint-settings="$emit('open-loadpoint-settings')"
+			@open-minsoc-settings="openMinSocSettings"
+			@open-plan-modal="openPlanModal"
+		/>
 		<VehicleSoc
 			v-bind="vehicleSocProps"
 			class="mt-2 mb-4"
@@ -63,7 +69,7 @@
 
 <script>
 import collector from "../mixins/collector";
-import formatter from "../mixins/formatter";
+import formatter, { POWER_UNIT } from "../mixins/formatter";
 import LabelAndValue from "./LabelAndValue.vue";
 import VehicleTitle from "./VehicleTitle.vue";
 import VehicleSoc from "./VehicleSoc.vue";
@@ -89,6 +95,7 @@ export default {
 		chargedEnergy: Number,
 		charging: Boolean,
 		vehicleClimaterActive: Boolean,
+		vehicleWelcomeActive: Boolean,
 		connected: Boolean,
 		currency: String,
 		effectiveLimitSoc: Number,
@@ -100,16 +107,21 @@ export default {
 		integratedDevice: Boolean,
 		limitEnergy: Number,
 		mode: String,
+		chargerStatusReason: String,
 		phaseAction: String,
 		phaseRemainingInterpolated: Number,
 		planActive: Boolean,
 		planEnergy: Number,
 		planProjectedStart: String,
+		planProjectedEnd: String,
 		planTime: String,
 		planTimeUnreachable: Boolean,
+		planOverrun: Number,
 		pvAction: String,
 		pvRemainingInterpolated: Number,
+		sessionSolarPercentage: Number,
 		smartCostActive: Boolean,
+		smartCostNextStart: String,
 		smartCostLimit: Number,
 		smartCostType: String,
 		socBasedCharging: Boolean,
@@ -125,7 +137,13 @@ export default {
 		vehicleLimitSoc: Number,
 		vehicleNotReachable: Boolean,
 	},
-	emits: ["limit-soc-updated", "limit-energy-updated", "change-vehicle", "remove-vehicle"],
+	emits: [
+		"limit-soc-updated",
+		"limit-energy-updated",
+		"change-vehicle",
+		"remove-vehicle",
+		"open-loadpoint-settings",
+	],
 	data() {
 		return {
 			displayLimitSoc: this.effectiveLimitSoc,
@@ -202,6 +220,9 @@ export default {
 			}
 			return false;
 		},
+		smartCostDisabled: function () {
+			return ["off", "now"].includes(this.mode);
+		},
 	},
 	watch: {
 		effectiveLimitSoc: function () {
@@ -226,11 +247,13 @@ export default {
 			this.$emit("remove-vehicle");
 		},
 		fmtEnergy(value) {
-			const inKw = value == 0 || value >= 1000;
-			return this.fmtKWh(value, inKw);
+			return this.fmtWh(value, value == 0 ? POWER_UNIT.KW : POWER_UNIT.AUTO);
 		},
 		openPlanModal() {
 			this.$refs.chargingPlan.openPlanModal();
+		},
+		openMinSocSettings() {
+			this.$refs.chargingPlan.openPlanModal(true);
 		},
 	},
 };

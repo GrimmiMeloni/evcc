@@ -74,7 +74,7 @@ func (d *dumper) Dump(name string, v interface{}) {
 		if p1, p2, p3, err := v.Powers(); err != nil {
 			fmt.Fprintf(w, "Power L1..L3:\t%v\n", err)
 		} else {
-			fmt.Fprintf(w, "Power L1..L3:\t%.3gW %.3gW %.3gW\n", p1, p2, p3)
+			fmt.Fprintf(w, "Power L1..L3:\t%.0fW %.0fW %.0fW\n", p1, p2, p3)
 		}
 	}
 
@@ -116,6 +116,19 @@ func (d *dumper) Dump(name string, v interface{}) {
 		}
 	}
 
+	if v, ok := v.(api.StatusReasoner); ok {
+		if status, err := v.StatusReason(); err != nil {
+			fmt.Fprintf(w, "Status reason:\t%v\n", err)
+		} else {
+			fmt.Fprintf(w, "Status reason:\t%v\n", status)
+		}
+	}
+
+	// controllable battery
+	if _, ok := v.(api.BatteryController); ok {
+		fmt.Fprintf(w, "Controllable:\ttrue\n")
+	}
+
 	if v, ok := v.(api.Charger); ok {
 		if enabled, err := v.Enabled(); err != nil {
 			fmt.Fprintf(w, "Enabled:\t%v\n", err)
@@ -137,6 +150,14 @@ func (d *dumper) Dump(name string, v interface{}) {
 			fmt.Fprintf(w, "Duration:\t%v\n", err)
 		} else {
 			fmt.Fprintf(w, "Duration:\t%v\n", duration.Truncate(time.Second))
+		}
+	}
+
+	if v, ok := v.(api.CurrentLimiter); ok {
+		if min, max, err := v.GetMinMaxCurrent(); err != nil {
+			fmt.Fprintf(w, "Mix/Max Current:\t%v\n", err)
+		} else {
+			fmt.Fprintf(w, "Mix/Max Current:\t%.1f/%.1fA\n", min, max)
 		}
 	}
 
@@ -199,6 +220,24 @@ func (d *dumper) Dump(name string, v interface{}) {
 		}
 	}
 
+	// currents and phases
+
+	if v, ok := v.(api.CurrentGetter); ok {
+		if f, err := v.GetMaxCurrent(); err != nil {
+			fmt.Fprintf(w, "Max Current:\t%v\n", err)
+		} else {
+			fmt.Fprintf(w, "Max Current:\t%.1fA\n", f)
+		}
+	}
+
+	if v, ok := v.(api.PhaseGetter); ok {
+		if f, err := v.GetPhases(); err != nil {
+			fmt.Fprintf(w, "Phases:\t%v\n", err)
+		} else {
+			fmt.Fprintf(w, "Phases:\t%d\n", f)
+		}
+	}
+
 	// Identity
 
 	if v, ok := v.(api.Identifier); ok {
@@ -215,8 +254,9 @@ func (d *dumper) Dump(name string, v interface{}) {
 	// features
 
 	if v, ok := v.(api.FeatureDescriber); ok {
-		ff := v.Features()
-		fmt.Fprintf(w, "Features:\t%v\n", ff)
+		if ff := v.Features(); len(ff) > 0 {
+			fmt.Fprintf(w, "Features:\t%v\n", ff)
+		}
 	}
 
 	w.Flush()

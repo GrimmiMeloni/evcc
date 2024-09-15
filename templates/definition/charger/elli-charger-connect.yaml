@@ -38,6 +38,5 @@ requirements:
 params:
   - preset: eebus
   - name: ip
-    required: true
 render: |
   {{ include "eebus" . }}

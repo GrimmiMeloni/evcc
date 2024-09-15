@@ -36,6 +36,7 @@ import (
 
 // Keba is an api.Charger implementation
 type Keba struct {
+	*embed
 	log  *util.Logger
 	conn *modbus.Connection
 }
@@ -64,19 +65,24 @@ func init() {
 	registry.Add("keba-modbus", NewKebaFromConfig)
 }
 
-//go:generate go run ../cmd/tools/decorate.go -f decorateKeba -b *Keba -r api.Charger -t "api.Meter,CurrentPower,func() (float64, error)" -t "api.MeterEnergy,TotalEnergy,func() (float64, error)" -t "api.PhaseCurrents,Currents,func() (float64, float64, float64, error)" -t "api.Identifier,Identify,func() (string, error)" -t "api.PhaseSwitcher,Phases1p3p,func(int) error" -t "api.PhaseGetter,GetPhases,func() (int, error)"
+//go:generate go run ../cmd/tools/decorate.go -f decorateKeba -b *Keba -r api.Charger -t "api.Meter,CurrentPower,func() (float64, error)" -t "api.MeterEnergy,TotalEnergy,func() (float64, error)" -t "api.PhaseCurrents,Currents,func() (float64, float64, float64, error)" -t "api.Identifier,Identify,func() (string, error)" -t "api.StatusReasoner,StatusReason,func() (api.Reason, error)" -t "api.PhaseSwitcher,Phases1p3p,func(int) error" -t "api.PhaseGetter,GetPhases,func() (int, error)"
 
 // NewKebaFromConfig creates a new Keba ModbusTCP charger
 func NewKebaFromConfig(other map[string]interface{}) (api.Charger, error) {
-	cc := modbus.TcpSettings{
-		ID: 255,
+	cc := struct {
+		embed              `mapstructure:",squash"`
+		modbus.TcpSettings `mapstructure:",squash"`
+	}{
+		TcpSettings: modbus.TcpSettings{
+			ID: 255,
+		},
 	}
 
 	if err := util.DecodeOther(other, &cc); err != nil {
 		return nil, err
 	}
 
-	wb, err := NewKeba(cc.URI, cc.ID)
+	wb, err := NewKeba(cc.embed, cc.URI, cc.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +92,7 @@ func NewKebaFromConfig(other map[string]interface{}) (api.Charger, error) {
 		currentPower, totalEnergy func() (float64, error)
 		currents                  func() (float64, float64, float64, error)
 		identify                  func() (string, error)
+		reason                    func() (api.Reason, error)
 	)
 
 	b, err := wb.conn.ReadHoldingRegisters(kebaRegProduct, 2)
@@ -101,6 +108,7 @@ func NewKebaFromConfig(other map[string]interface{}) (api.Charger, error) {
 
 	if features := binary.BigEndian.Uint32(b); features%10 > 0 {
 		identify = wb.identify
+		reason = wb.statusReason
 	}
 
 	// phases
@@ -125,11 +133,11 @@ func NewKebaFromConfig(other map[string]interface{}) (api.Charger, error) {
 		go wb.heartbeat(time.Duration(u) * time.Second / 2)
 	}
 
-	return decorateKeba(wb, currentPower, totalEnergy, currents, identify, phasesS, phasesG), nil
+	return decorateKeba(wb, currentPower, totalEnergy, currents, identify, reason, phasesS, phasesG), nil
 }
 
 // NewKeba creates a new charger
-func NewKeba(uri string, slaveID uint8) (*Keba, error) {
+func NewKeba(embed embed, uri string, slaveID uint8) (*Keba, error) {
 	conn, err := modbus.NewConnection(uri, "", "", 0, modbus.Tcp, slaveID)
 	if err != nil {
 		return nil, err
@@ -143,8 +151,9 @@ func NewKeba(uri string, slaveID uint8) (*Keba, error) {
 	conn.Logger(log.TRACE)
 
 	wb := &Keba{
-		log:  log,
-		conn: conn,
+		embed: &embed,
+		log:   log,
+		conn:  conn,
 	}
 
 	return wb, err
@@ -185,6 +194,18 @@ func (wb *Keba) Status() (api.ChargeStatus, error) {
 	default:
 		return api.StatusNone, fmt.Errorf("invalid status: %d", status)
 	}
+}
+
+// statusReason implements the api.StatusReasoner interface
+func (wb *Keba) statusReason() (api.Reason, error) {
+	res := api.ReasonUnknown
+
+	b, err := wb.conn.ReadHoldingRegisters(kebaRegChargingState, 2)
+	if err == nil && binary.BigEndian.Uint32(b) == 1 {
+		res = api.ReasonWaitingForAuthorization
+	}
+
+	return res, err
 }
 
 // Enabled implements the api.Charger interface

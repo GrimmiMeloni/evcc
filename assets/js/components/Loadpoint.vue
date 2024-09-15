@@ -12,11 +12,15 @@
 						{{ loadpointTitle }}
 					</div>
 				</h3>
-				<LoadpointSettingsButton :id="id" class="d-block d-sm-none" />
+				<LoadpointSettingsButton class="d-block d-sm-none" @click="openSettingsModal" />
 			</div>
 			<div class="mb-3 d-flex align-items-center">
-				<Mode class="flex-grow-1" :mode="mode" @updated="setTargetMode" />
-				<LoadpointSettingsButton :id="id" class="d-none d-sm-block ms-2" />
+				<Mode class="flex-grow-1" v-bind="modeProps" @updated="setTargetMode" />
+				<LoadpointSettingsButton
+					:id="id"
+					class="d-none d-sm-block ms-2"
+					@click="openSettingsModal"
+				/>
 			</div>
 		</div>
 		<LoadpointSettingsModal
@@ -80,6 +84,7 @@
 			@limit-energy-updated="setLimitEnergy"
 			@change-vehicle="changeVehicle"
 			@remove-vehicle="removeVehicle"
+			@open-loadpoint-settings="openSettingsModal"
 		/>
 	</div>
 </template>
@@ -92,12 +97,14 @@ import Mode from "./Mode.vue";
 import Vehicle from "./Vehicle.vue";
 import Phases from "./Phases.vue";
 import LabelAndValue from "./LabelAndValue.vue";
-import formatter from "../mixins/formatter";
+import formatter, { POWER_UNIT } from "../mixins/formatter";
 import collector from "../mixins/collector";
 import LoadpointSettingsButton from "./LoadpointSettingsButton.vue";
 import LoadpointSettingsModal from "./LoadpointSettingsModal.vue";
 import VehicleIcon from "./VehicleIcon";
 import LoadpointSessionInfo from "./LoadpointSessionInfo.vue";
+import smartCostAvailable from "../utils/smartCostAvailable";
+import Modal from "bootstrap/js/dist/modal";
 
 export default {
 	name: "Loadpoint",
@@ -134,6 +141,7 @@ export default {
 		sessionSolarPercentage: Number,
 
 		// charger
+		chargerStatusReason: String,
 		chargerFeatureIntegratedDevice: Boolean,
 		chargerFeatureHeating: Boolean,
 		chargerIcon: String,
@@ -151,6 +159,7 @@ export default {
 		vehicles: Array,
 		planActive: Boolean,
 		planProjectedStart: String,
+		planProjectedEnd: String,
 		planOverrun: Number,
 		planEnergy: Number,
 		planTime: String,
@@ -162,6 +171,7 @@ export default {
 
 		// details
 		vehicleClimaterActive: Boolean,
+		vehicleWelcomeActive: Boolean,
 		chargePower: Number,
 		chargedEnergy: Number,
 		chargeRemainingDuration: Number,
@@ -182,13 +192,16 @@ export default {
 		phaseRemaining: Number,
 		pvRemaining: Number,
 		pvAction: String,
-		smartCostLimit: { type: Number, default: 0 },
+		smartCostLimit: { type: Number, default: null },
 		smartCostType: String,
 		smartCostActive: Boolean,
+		smartCostNextStart: String,
 		tariffGrid: Number,
 		tariffCo2: Number,
 		currency: String,
 		multipleLoadpoints: Boolean,
+		gridConfigured: Boolean,
+		pvConfigured: Boolean,
 	},
 	data() {
 		return {
@@ -217,6 +230,9 @@ export default {
 		},
 		phasesProps: function () {
 			return this.collectProps(Phases);
+		},
+		modeProps: function () {
+			return this.collectProps(Mode);
 		},
 		sessionInfoProps: function () {
 			return this.collectProps(LoadpointSessionInfo);
@@ -250,6 +266,12 @@ export default {
 		},
 		socBasedPlanning: function () {
 			return this.socBasedCharging && this.vehicle?.capacity > 0;
+		},
+		pvPossible: function () {
+			return this.pvConfigured || this.gridConfigured;
+		},
+		hasSmartCost: function () {
+			return smartCostAvailable(this.smartCostType);
 		},
 	},
 	watch: {
@@ -315,12 +337,16 @@ export default {
 			api.delete(this.apiPath("vehicle"));
 		},
 		fmtPower(value) {
-			const inKw = value == 0 || value >= 1000;
-			return this.fmtKw(value, inKw);
+			return this.fmtW(value, POWER_UNIT.AUTO);
 		},
 		fmtEnergy(value) {
-			const inKw = value == 0 || value >= 1000;
-			return this.fmtKWh(value, inKw);
+			return this.fmtWh(value, POWER_UNIT.AUTO);
+		},
+		openSettingsModal() {
+			const modal = Modal.getOrCreateInstance(
+				document.getElementById(`loadpointSettingsModal_${this.id}`)
+			);
+			modal.show();
 		},
 	},
 };

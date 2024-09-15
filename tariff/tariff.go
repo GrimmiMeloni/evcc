@@ -80,7 +80,6 @@ func NewConfigurableFromConfig(other map[string]interface{}) (api.Tariff, error)
 
 func (t *Tariff) run(forecastG func() (string, error), done chan error) {
 	var once sync.Once
-	bo := newBackoff()
 
 	tick := time.NewTicker(time.Hour)
 	for ; true; <-tick.C {
@@ -93,17 +92,18 @@ func (t *Tariff) run(forecastG func() (string, error), done chan error) {
 			if err := json.Unmarshal([]byte(s), &data); err != nil {
 				return backoff.Permanent(err)
 			}
+			for i, r := range data {
+				data[i].Price = t.totalPrice(r.Price)
+			}
 			return nil
-		}, bo); err != nil {
+		}, bo()); err != nil {
 			once.Do(func() { done <- err })
 
 			t.log.ERROR.Println(err)
 			continue
 		}
 
-		data.Sort()
-
-		t.data.Set(data)
+		mergeRates(t.data, data)
 		once.Do(func() { close(done) })
 	}
 }

@@ -2,16 +2,10 @@ package ocpp
 
 import (
 	"errors"
-	"time"
 
 	"github.com/lorenzodonini/ocpp-go/ocpp1.6/core"
 	"github.com/lorenzodonini/ocpp-go/ocpp1.6/firmware"
 	"github.com/lorenzodonini/ocpp-go/ocpp1.6/types"
-)
-
-const (
-	messageExpiry     = 30 * time.Second
-	transactionExpiry = time.Hour
 )
 
 var (
@@ -21,7 +15,6 @@ var (
 )
 
 func (cp *CP) Authorize(request *core.AuthorizeRequest) (*core.AuthorizeConfirmation, error) {
-	// TODO check if this authorizes foreign RFID tags
 	res := &core.AuthorizeConfirmation{
 		IdTagInfo: &types.IdTagInfo{
 			Status: types.AuthorizationStatusAccepted,
@@ -34,9 +27,13 @@ func (cp *CP) Authorize(request *core.AuthorizeRequest) (*core.AuthorizeConfirma
 func (cp *CP) BootNotification(request *core.BootNotificationRequest) (*core.BootNotificationConfirmation, error) {
 	res := &core.BootNotificationConfirmation{
 		CurrentTime: types.Now(),
-		Interval:    60, // TODO
+		Interval:    60,
 		Status:      core.RegistrationStatusAccepted,
 	}
+
+	cp.onceBoot.Do(func() {
+		cp.bootNotificationRequestC <- request
+	})
 
 	return res, nil
 }
@@ -54,12 +51,11 @@ func (cp *CP) StatusNotification(request *core.StatusNotificationRequest) (*core
 		return nil, ErrInvalidRequest
 	}
 
-	conn := cp.connectorByID(request.ConnectorId)
-	if conn == nil {
-		return nil, ErrInvalidConnector
+	if conn := cp.connectorByID(request.ConnectorId); conn != nil {
+		return conn.StatusNotification(request)
 	}
 
-	return conn.StatusNotification(request)
+	return new(core.StatusNotificationConfirmation), nil
 }
 
 func (cp *CP) DataTransfer(request *core.DataTransferRequest) (*core.DataTransferConfirmation, error) {
@@ -81,6 +77,12 @@ func (cp *CP) Heartbeat(request *core.HeartbeatRequest) (*core.HeartbeatConfirma
 func (cp *CP) MeterValues(request *core.MeterValuesRequest) (*core.MeterValuesConfirmation, error) {
 	if request == nil {
 		return nil, ErrInvalidRequest
+	}
+
+	// signal received
+	select {
+	case cp.meterC <- struct{}{}:
+	default:
 	}
 
 	conn := cp.connectorByID(request.ConnectorId)

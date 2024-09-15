@@ -5,28 +5,30 @@ control = "Batteriinställningar"
 discharge = "Förhindra urladdning i snabbt läge och vid schemalagd laddning."
 disclaimerHint = "OBS:"
 disclaimerText = "Inställningarna gäller enbart sol-läge. Laddning justeras därefter"
-legendBottomName = "Prioritera hem"
-legendBottomSubline = "används inte till laddning"
-legendMiddleName = "fordon först"
-legendMiddleSubline = "hem därefter"
+gridChargeTab = "Laddning från nätet"
+legendBottomName = "Prioritera laddning av hemmabatteri"
+legendBottomSubline = "tills den når {soc}."
+legendMiddleName = "Prioritera laddning av fordon"
+legendMiddleSubline = "när hemmabatteriet är över {soc}."
 legendTitle = "Hur ska solenergin användas?"
-legendTopAutostart = "startar automatiskt"
-legendTopName = "laddning med batteristöd"
-legendTopSubline = "utan avbrott"
+legendTopAutostart = "Startar automatiskt"
+legendTopName = "Fordonsladdning med batteristöd"
+legendTopSubline = "när hemmabatteriet är över {soc}."
 modalTitle = "Hemmabatteri"
+usageTab = "Batterianvändning"
 
 [batterySettings.bufferStart]
-above = "när den är över {soc}"
-full = "när det är {soc}"
+above = "när den är över {soc}."
+full = "när det är {soc}."
 low = "när det är något fullt"
 medium = "när det är halvfullt"
-never = "bara med tillräckligt sol-överskott"
+never = "bara med tillräckligt sol-överskott."
 
 [config]
 
 [config.battery]
-titleAdd = "Lägg till batterimätare"
-titleEdit = "Ändra batterimätare"
+titleAdd = "Lägg till batteri"
+titleEdit = "Ändra batteri"
 
 [config.circuits]
 description = "Säkrar, att summan av laddpunkter kopplad till en krets inte överskrider den konfigurerade effektgränsen. Kretsar kan nästlas för att bygga en hierarki."
@@ -35,22 +37,53 @@ title = "Belastningshantering"
 [config.control]
 description = "Standardvärdena är vanligtsvis ok. Ändra bara om du vet vad du gör."
 descriptionInterval = "Uppdateringsintervall i sekunder. Definierar hur ofta evcc läser in data, ändrar laddeffekt och uppdaterar UI. Korta intervall (<30s) kan orsaka självsvängning och andra felaktiga resultat."
+descriptionMaxGridSupply = "Endast relevant för hybridinverter som inte kan ge full DC-effekt för att försörja hemmet via AC. Detta scenario kan leda till oönskad nätanvändning eftersom evcc förutsätter att full DC-effekt är tillgänglig. Lägg in ett värde på minst 50W för att förhindra detta."
+descriptionResidualPower = "Flyttar fokuspunkt på kontrolloopen. Om du har ett hemmabatteri så rekommenderas att ha ett värde på minst 100 W. Då får batteriet lite högre prioritet jämfört med nätanvändning."
+labelInterval = "Uppdateringsintervall"
+labelMaxGridSupply = "Max. näteffekt vid laddning"
+labelResidualPower = "Kvarvarande effekt"
+title = "Kontrollera beteende"
 
 [config.deviceValue]
+broker = "Broker"
+bucket = "Bucket"
 capacity = "Kapacitet"
 chargeStatus = "Status"
+chargeStatusA = "ej ansluten"
+chargeStatusB = "ansluten"
+chargeStatusC = "laddar"
+chargeStatusE = "ingen ström"
+chargeStatusF = "fel"
 chargedEnergy = "Laddad"
+co2 = "Elnät CO₂"
+configured = "Konfigurerad"
+controllable = "Kontrollerbar"
+currency = "Valuta"
 current = "Ström"
+currentRange = "Ström"
 enabled = "Aktiverad"
 energy = "Energi"
+feedinPrice = "Inmatningspris"
+gridPrice = "Nätpris"
+no = "nej"
 odometer = "Mätarställning"
+org = "Organisation"
 phaseCurrents = "Ström L1..L3"
 phasePowers = "Effekt L1..L3"
 phaseVoltages = "Spänning L1..L3"
 power = "Effekt"
+powerRange = "Kraft"
 range = "Räckvidd"
 soc = "SoC"
 socLimit = "SoC gräns"
+temp = "Temperatur"
+topic = "Ämne"
+url = "URL"
+yes = "ja"
+
+[config.eebus]
+description = "Inställning som tillåter evcc att kommunicera med andra EEBus-enheter."
+title = "EEBus"
 
 [config.form]
 example = "Exempel"
@@ -58,21 +91,53 @@ optional = "valfri"
 
 [config.general]
 cancel = "Avbryt"
+docsLink = "Se dokumentation."
+experimental = "Experimentell"
+off = "av"
+on = "på"
+password = "Lösenord"
+remove = "Ta bort"
 save = "Spara"
+telemetry = "Telemetri"
+title = "Titel"
 
 [config.grid]
+title = "Elmätare"
 titleAdd = "Lägg till elnätsmätare"
 titleEdit = "Ändra elnätsmätare"
+
+[config.hems]
+description = "Anslut evcc till annat energistyrningssystem i hemmet"
+title = "HEMS"
+
+[config.influx]
+description = "Skriver laddata och andra mätningar till InfluxDB. Använd Grafana eller andra verktyg för att visualisera data."
+descriptionToken = "Se dokumentationen för InfluxDB. https://docs.influxdata.com/influxdb/v2/admin/"
+labelBucket = "Bucket"
+labelDatabase = "Databas"
+labelOrg = "Organisation"
+labelPassword = "Lösenord"
+labelToken = "API Token"
+labelUrl = "URL"
+labelUser = "Användarnamn"
+title = "InfluxDB"
+v1Support = "Behöver du support till InfluxDB 1.x?"
+v2Support = "Tillbaka till InfluxDB 2.x"
 
 [config.main]
 addLoadpoint = "Lägg till laddbox"
 addPvBattery = "Lägg till solceller eller batteri"
 addVehicle = "Lägg till fordon"
+configured = "konfigurerad"
 edit = "ändra"
 title = "Inställningar"
 unconfigured = "ej konfigurerad"
 vehicles = "Mina fordon"
 yaml = "Konfigurera i evcc.yaml. Kan inte ändras i UI."
+
+[config.messaging]
+description = "Mottag notiser om dina laddningar."
+title = "Notiser"
 
 [config.meter]
 cancel = "Avbryt"
@@ -82,7 +147,39 @@ template = "Tillverkare"
 titleChoice = "Vad vill du lägga till?"
 validateSave = "Validera & spara"
 
+[config.modbusproxy]
+description = "Tillåt flera klienter till en Modbus-enhet."
+title = "Modbus Proxy"
+
+[config.mqtt]
+authentication = "Autentisering"
+description = "Anslut till en MQTT-broker för att utbyta data med andra system på ditt nätverk."
+descriptionClientId = "Avsändare av notis. Om tomt används `evcc-[rand]` ."
+descriptionTopic = "Lämna tomt för att deaktivera publicering."
+labelBroker = "Broker"
+labelCheckInsecure = "Tillåt egensignerade certifikat"
+labelClientId = "Klient ID"
+labelInsecure = "Certifikatkontroll"
+labelPassword = "Lösenord"
+labelTopic = "Ämne"
+labelUser = "Användarnamn"
+publishing = "Publicerar"
+title = "MQTT"
+
+[config.network]
+descriptionHost = "Använd .local suffix för att aktivera mDNS. Relevant för upptäckt av mobilappen och vissa OCPP-laddare."
+descriptionPort = "Port för webinterface och API. Uppdatera webläsarens URL om du ändrar detta."
+descriptionSchema = "Påverkar endast hur URLer skapas. Val av HTTPS kommer ej att aktivera kryptering."
+labelHost = "Värdnamn"
+labelPort = "Port"
+labelSchema = "Schema"
+title = "Nätverk"
+
 [config.options]
+
+[config.options.boolean]
+no = "nej"
+yes = "ja"
 
 [config.options.endianness]
 big = "big-endian"
@@ -98,11 +195,25 @@ titleEdit = "Ändra solcellsmätare"
 
 [config.section]
 general = "Allmänna"
+grid = "Elnät"
+integrations = "Integrationer"
+loadpoints = "Laddpunkter"
+meter = "Sol & batteri"
 system = "System"
+vehicles = "Fordon"
 
 [config.site]
 cancel = "Avbryt"
 save = "Spara"
+
+[config.sponsor]
+addToken = "Ange sponsor-token"
+changeToken = "Ändra sponsor-token"
+description = "Sponsormodellen hjälper oss att underhålla projektet och hållbart bygga nya och spännande funktioner. Som sponsor får du tillgång till alla laddningsmöjligheter."
+descriptionToken = "Du får token från {url}. Vi erbjuder också en prov-token för testning."
+error = "Din sponsor-token är inte giltig."
+labelToken = "Sponsor-token"
+title = "Sponsor"
 
 [config.system]
 logs = "Loggar"
@@ -111,6 +222,10 @@ restartRequiredDescription = "Starta om för att de nya inställningarna ska bö
 restartRequiredMessage = "Inställningar ändrade."
 restartingDescription = "Vänligen vänta..."
 restartingMessage = "Startar om evcc."
+
+[config.tariffs]
+description = "Lägg in din energitariff för att beräkna kostnaden för dina laddningar."
+title = "Tariffer"
 
 [config.title]
 description = "Visas på huvudskärm och tabbar."
@@ -178,6 +293,7 @@ tabTitle = "Mina uppgifter"
 [footer.savings.period]
 30d = "senaste 30 dagar"
 365d = "senaste 365 dagarna"
+thisYear = "detta år"
 total = "totalt"
 
 [footer.sponsor]
@@ -250,8 +366,10 @@ areaLabel = "Filtrera per område"
 areas = "Alla områden"
 download = "Ladda hem alla loggar"
 levelLabel = "Filtrera på loggnivå"
+nAreas = "{count} områden"
 noResults = "Inga matchande loggposter."
 search = "Sök"
+selectAll = "välj alla"
 showAll = "Visa allt"
 title = "Loggar"
 update = "Autouppdatera"
@@ -292,6 +410,8 @@ batteryCharge = "Batteri laddas"
 batteryDischarge = "Batteri laddas ur"
 batteryHold = "Batteri (låst)"
 batteryTooltip = "{energy} av {total} ({soc})"
+cheapBatteryGridCharge = "billig nät-energi"
+cleanBatteryGridCharge = "grön nät-energi"
 gridImport = "Import från elnät"
 homePower = "Konsumtion"
 loadpoints = "Laddare | Laddare | {count} laddare"
@@ -357,6 +477,7 @@ minpv = "Min+Sol"
 now = "Snabbt"
 off = "Av"
 pv = "Sol"
+smart = "Smart"
 
 [main.provider]
 login = "logga in"
@@ -372,7 +493,7 @@ descriptionSoc = "När ska fordonet vara laddat till {targetSoc}?"
 inactiveLabel = "Mål-tid"
 modalTitle = "Ange måltid"
 noActivePlan = "Ingen aktiv prenumeration"
-notReachableInTime = "Laddmål kan inte nås i tid. Beräknad sluttid: {endTime}"
+notReachableInTime = "Laddmål kommer att nås {endTime} senare."
 onlyInPvMode = "Laddplan fungerar enbart i sol-läge."
 planDescription = "Ange din avgångstid och evcc kommer att ladda så kostnadseffektivt och miljövänligt som möjligt."
 planDuration = "Laddtid"
@@ -385,7 +506,7 @@ remove = "Ta bort"
 setPlan = "Laddplan"
 setTargetTime = "ingen"
 targetIsAboveLimit = "Konfigurerat laddmål {limit} kommer ignoreras denna tidsperiod."
-targetIsAboveVehicleLimit = "Öka fordonets gräns ({limit}) för att nå laddmålet."
+targetIsAboveVehicleLimit = "Fordonets laddgräns är under målet."
 targetIsInThePast = "Välj en tid i framtiden, Marty."
 targetIsTooFarInTheFuture = "Vi kommer att justera planen så snart vi vet mer om framtiden."
 title = "Mål-tid"
@@ -428,23 +549,32 @@ ready = "redo"
 vehicleLimit = "Fordonsgräns: {soc}"
 
 [main.vehicleStatus]
+awaitingAuthorization = "Väntar på godkännande."
 charging = "Laddar..."
-cheapEnergyCharging = "Laddar billig energi: {price} (gräns {limit})"
-cleanEnergyCharging = "Laddar grön energi: {co2} (gräns {limit})"
+cheapEnergyCharging = "Billig energi är tillgänglig."
+cheapEnergyNextStart = "Billig energi om {duration}."
+cheapEnergySet = "Prisgräns sparad."
+cleanEnergyCharging = "Grön energi tillgänglig."
+cleanEnergyNextStart = "Grön energi om {duration}."
+cleanEnergySet = "CO₂ gräns sparad."
 climating = "Förvärmning identifierad."
 connected = "Inkopplad."
+disconnectRequired = "Session avbruten. Prova att återansluta."
 disconnected = "Frånkopplad."
+finished = "Färdig."
 minCharge = "Minimiladdning till {soc}."
-pvDisable = "Inte tillräckligt med överskott. Pausar om {remaining}..."
-pvEnable = "Överskott tillgängligt. Börjar om {remaining}..."
-scale1p = "Minskar till 1-fas-laddning om {remaining}..."
-scale3p = "Ökar till 3-fas-laddning om {remaining}..."
-targetChargeActive = "Laddplan aktiv..."
-targetChargePlanned = "Laddplan startar {time}."
+pvDisable = "Inte tillräckligt med överskott. Pausar strax."
+pvEnable = "Överskott tillgängligt. Börjar strax."
+scale1p = "Minskar till 1-fas-laddning strax."
+scale3p = "Ökar till 3-fas-laddning strax."
+targetChargeActive = "Laddplan aktiv. Beräknas vara klar om {duration}."
+targetChargePlanned = "Laddplan startar om {duration}."
 targetChargeWaitForVehicle = "Laddare beredd. Väntar på fordon..."
 unknown = ""
-vehicleLimitReached = "Fordonsgränsen {soc} nådd."
+vehicleLimit = "Fordonsgräns."
+vehicleLimitReached = "Fordonets gräns nådd."
 waitForVehicle = "Redo. Väntar på fordon..."
+welcome = "Kort inledande laddning för att kontrollera förbindelsen."
 
 [notifications]
 dismissAll = "Avvisa alla"
@@ -452,8 +582,12 @@ logs = "Se kompletta loggar"
 modalTitle = "Meddelanden"
 
 [offline]
+configurationError = "Fel under uppstart. Kontrollera din konfiguration och starta om."
 message = "Inte ansluten till en server."
 reload = "Ladda igen?"
+restart = "Omstart"
+restartNeeded = "Krävs för att spara ändringar."
+restarting = "Servern är strax tillbaka."
 
 [passwordModal]
 description = "Använd lösenord för att skydda inställningarna. Huvudskärmen kan användas utan att logga in."
@@ -545,7 +679,7 @@ auto = "Automatisk"
 label = "Språk"
 
 [settings.sponsorToken]
-expires = "Din sponsortoken löper ut om {inXDays}. {getNewToken} och uppdatera din konfigurationsfil."
+expires = "Din sponsortoken löper ut om {inXDays}. {getNewToken} och uppdatera här."
 getNew = "Hämta en ny"
 hint = "Observera: Vi kommer att automatisera detta i framtiden."
 

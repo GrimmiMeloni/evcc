@@ -137,13 +137,18 @@ func (site *Site) Vehicles() site.Vehicles {
 	return &vehicles{log: site.log}
 }
 
-// GetCircuit returns the circuit
+// GetCircuit returns the root circuit
 func (site *Site) GetCircuit() api.Circuit {
-	if site.circuit == nil {
-		// return untyped nil
-		return nil
-	}
+	site.RLock()
+	defer site.RUnlock()
 	return site.circuit
+}
+
+// SetCircuit sets the root circuit
+func (site *Site) SetCircuit(circuit api.Circuit) {
+	site.Lock()
+	defer site.Unlock()
+	site.circuit = circuit
 }
 
 // GetPrioritySoc returns the PrioritySoc
@@ -246,7 +251,7 @@ func (site *Site) SetBufferStartSoc(soc float64) error {
 func (site *Site) GetMaxGridSupplyWhileBatteryCharging() float64 {
 	site.RLock()
 	defer site.RUnlock()
-	return site.maxGridSupplyWhileBatteryCharging
+	return site.MaxGridSupplyWhileBatteryCharging
 }
 
 func (site *Site) SetMaxGridSupplyWhileBatteryCharging(power float64) error {
@@ -259,10 +264,10 @@ func (site *Site) SetMaxGridSupplyWhileBatteryCharging(power float64) error {
 
 	site.log.DEBUG.Println("set max grid supply while battery charging:", power)
 
-	if site.maxGridSupplyWhileBatteryCharging != power {
-		site.maxGridSupplyWhileBatteryCharging = power
-		settings.SetFloat(keys.MaxGridSupplyWhileBatteryCharging, site.maxGridSupplyWhileBatteryCharging)
-		site.publish(keys.MaxGridSupplyWhileBatteryCharging, site.maxGridSupplyWhileBatteryCharging)
+	if site.MaxGridSupplyWhileBatteryCharging != power {
+		site.MaxGridSupplyWhileBatteryCharging = power
+		settings.SetFloat(keys.MaxGridSupplyWhileBatteryCharging, site.MaxGridSupplyWhileBatteryCharging)
+		site.publish(keys.MaxGridSupplyWhileBatteryCharging, site.MaxGridSupplyWhileBatteryCharging)
 	}
 
 	return nil
@@ -327,14 +332,14 @@ func (site *Site) GetTariff(tariff string) api.Tariff {
 	}
 }
 
-// GetBatteryControl returns the battery control mode
+// GetBatteryDischargeControl returns the battery control mode (no discharge only)
 func (site *Site) GetBatteryDischargeControl() bool {
 	site.RLock()
 	defer site.RUnlock()
 	return site.batteryDischargeControl
 }
 
-// SetBatteryControl sets the battery control mode
+// SetBatteryDischargeControl sets the battery control mode (no discharge only)
 func (site *Site) SetBatteryDischargeControl(val bool) error {
 	site.log.DEBUG.Println("set battery discharge control:", val)
 
@@ -342,17 +347,35 @@ func (site *Site) SetBatteryDischargeControl(val bool) error {
 	defer site.Unlock()
 
 	if site.batteryDischargeControl != val {
-		// reset to normal when disabling
-		if mode := site.batteryMode; !val && batteryModeModified(mode) {
-			if err := site.applyBatteryMode(api.BatteryNormal); err != nil {
-				return err
-			}
-		}
-
 		site.batteryDischargeControl = val
 		settings.SetBool(keys.BatteryDischargeControl, val)
 		site.publish(keys.BatteryDischargeControl, val)
 	}
 
 	return nil
+}
+
+func (site *Site) GetBatteryGridChargeLimit() *float64 {
+	site.RLock()
+	defer site.RUnlock()
+	return site.batteryGridChargeLimit
+}
+
+func (site *Site) SetBatteryGridChargeLimit(val *float64) {
+	site.log.DEBUG.Println("set grid charge limit:", printPtr("%.1f", val))
+
+	site.Lock()
+	defer site.Unlock()
+
+	if !ptrValueEqual(site.batteryGridChargeLimit, val) {
+		site.batteryGridChargeLimit = val
+
+		if val == nil {
+			settings.SetString(keys.BatteryGridChargeLimit, "")
+			site.publish(keys.BatteryGridChargeLimit, nil)
+		} else {
+			settings.SetFloat(keys.BatteryGridChargeLimit, *val)
+			site.publish(keys.BatteryGridChargeLimit, *val)
+		}
+	}
 }

@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/provider/pipeline"
 	"github.com/evcc-io/evcc/util"
 	"github.com/evcc-io/evcc/util/request"
 	"github.com/evcc-io/evcc/util/transport"
-	"nhooyr.io/websocket"
 )
 
 const retryDelay = 5 * time.Second
@@ -152,7 +152,15 @@ var _ StringProvider = (*Socket)(nil)
 func (p *Socket) StringGetter() (func() (string, error), error) {
 	return func() (string, error) {
 		val, err := p.val.Get()
-		return string(val), err
+		if err != nil {
+			return "", err
+		}
+
+		if err := knownErrors(val); err != nil {
+			return "", err
+		}
+
+		return string(val), nil
 	}, nil
 }
 

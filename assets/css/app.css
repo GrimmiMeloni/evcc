@@ -112,6 +112,10 @@ body {
 	color: var(--evcc-default-text);
 }
 
+body:not(.modal-open) {
+	overflow-y: scroll;
+}
+
 h1,
 h2,
 h3,
@@ -184,6 +188,13 @@ a:hover {
 	--bs-btn-border-width: 2px;
 }
 
+.btn-reset {
+	border: none;
+	background: none;
+	padding: 0;
+	color: inherit;
+}
+
 .btn-primary,
 .btn-primary:focus {
 	background-color: var(--bs-primary);
@@ -248,6 +259,10 @@ a:hover {
 	--bs-btn-hover-bg: transparent;
 	--bs-btn-hover-color: var(--bs-gray-medium);
 	--bs-btn-hover-border-color: var(--bs-gray-medium);
+}
+
+.btn-link:hover {
+	color: var(--bs-primary);
 }
 
 .dark .btn-outline-secondary {

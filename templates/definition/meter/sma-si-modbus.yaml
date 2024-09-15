@@ -92,7 +92,7 @@ render: |
           source: sequence
           set:
           - source: const
-            value: -2147483648 # Wirkleistungsvorgabe
+            value: -2147483647 # Wirkleistungsvorgabe
             set:
               source: modbus
               {{- include "modbus" . | indent 12 }}
@@ -109,6 +109,4 @@ render: |
                 address: 40151 # SMA Modbus Profile: Inverter.WModCfg.WCtlComCfg.WCtlComAct
                 type: writemultiple
                 decode: uint32
-  {{- if .capacity }}
   capacity: {{ .capacity }} # kWh
-  {{- end }}

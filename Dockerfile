@@ -1,5 +1,5 @@
 # STEP 1 build ui
-FROM --platform=$BUILDPLATFORM node:18-alpine as node
+FROM --platform=$BUILDPLATFORM node:22-alpine as node
 
 RUN apk update && apk add --no-cache make
 
@@ -20,7 +20,7 @@ RUN make ui
 
 
 # STEP 2 build executable binary
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine as builder
 
 # Install git + SSL ca certificates.
 # Git is required for fetching the dependencies.
@@ -84,13 +84,15 @@ COPY packaging/docker/bin/* /app/
 
 # mDNS
 EXPOSE 5353/udp
+# EEBus
+EXPOSE 4712/tcp
 # UI and /api
 EXPOSE 7070/tcp
 # KEBA charger
 EXPOSE 7090/udp
 # OCPP charger
 EXPOSE 8887/tcp
-# GoodWe Wifi Inverter
+# Modbus UDP
 EXPOSE 8899/udp
 # SMA Energy Manager
 EXPOSE 9522/udp
