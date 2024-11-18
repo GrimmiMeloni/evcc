@@ -1,7 +1,6 @@
 package ocpp
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/util"
 	"github.com/lorenzodonini/ocpp-go/ocpp1.6/core"
-	"github.com/lorenzodonini/ocpp-go/ocpp1.6/remotetrigger"
 	"github.com/lorenzodonini/ocpp-go/ocpp1.6/types"
 )
 
@@ -66,40 +64,9 @@ func (conn *Connector) IdTag() string {
 	return conn.idTag
 }
 
-func (conn *Connector) TriggerMessageRequest(feature remotetrigger.MessageTrigger, f ...func(request *remotetrigger.TriggerMessageRequest)) error {
-	return Instance().TriggerMessageRequest(conn.cp.ID(), feature, func(request *remotetrigger.TriggerMessageRequest) {
-		request.ConnectorId = &conn.id
-		for _, f := range f {
-			f(request)
-		}
-	})
-}
-
-func (conn *Connector) remoteStartTransactionRequest() {
-	rc := make(chan error, 1)
-	err := Instance().RemoteStartTransaction(conn.cp.ID(), func(resp *core.RemoteStartTransactionConfirmation, err error) {
-		if err == nil && resp != nil && resp.Status != types.RemoteStartStopStatusAccepted {
-			err = errors.New(string(resp.Status))
-		}
-
-		rc <- err
-	}, conn.remoteIdTag, func(request *core.RemoteStartTransactionRequest) {
-		connector := conn.id
-		request.ConnectorId = &connector
-	})
-
-	if err := wait(err, rc); err != nil {
-		conn.log.ERROR.Printf("failed to start remote transaction: %v", err)
-	}
-}
-
-func (conn *Connector) SetChargingProfile(profile *types.ChargingProfile) error {
-	return Instance().SetChargingProfileRequest(conn.cp.ID(), conn.id, profile)
-}
-
 // getScheduleLimit queries the current or power limit the charge point is currently set to offer
 func (conn *Connector) GetScheduleLimit(duration int) (float64, error) {
-	schedule, err := Instance().GetCompositeScheduleRequest(conn.cp.ID(), conn.id, duration)
+	schedule, err := conn.cp.GetCompositeScheduleRequest(conn.id, duration)
 	if err != nil {
 		return 0, err
 	}
@@ -219,7 +186,7 @@ func (conn *Connector) GetMaxCurrent() (float64, error) {
 
 	if m, ok := conn.measurements[types.MeasurandCurrentOffered]; ok {
 		f, err := strconv.ParseFloat(m.Value, 64)
-		return scale(f, m.Unit) / 1e3, err
+		return scale(f, m.Unit), err
 	}
 
 	return 0, api.ErrNotAvailable
@@ -298,10 +265,10 @@ func (conn *Connector) CurrentPower() (float64, error) {
 	}
 
 	// fallback for missing total power
-
-	res, found, err := conn.phaseMeasurements(types.MeasurandPowerActiveImport, "")
-	if found {
-		return res[0] + res[1] + res[2], err
+	for _, suffix := range []types.Measurand{"", "-N"} {
+		if res, found, err := conn.phaseMeasurements(types.MeasurandPowerActiveImport, suffix); found {
+			return res[0] + res[1] + res[2], err
+		}
 	}
 
 	return 0, api.ErrNotAvailable
@@ -380,9 +347,10 @@ func (conn *Connector) Currents() (float64, float64, float64, error) {
 		return 0, 0, 0, nil
 	}
 
-	res, found, err := conn.phaseMeasurements(types.MeasurandCurrentImport, "")
-	if found {
-		return res[0], res[1], res[2], err
+	for _, suffix := range []types.Measurand{"", "-N"} {
+		if res, found, err := conn.phaseMeasurements(types.MeasurandCurrentImport, suffix); found {
+			return res[0], res[1], res[2], err
+		}
 	}
 
 	return 0, 0, 0, api.ErrNotAvailable
@@ -401,14 +369,10 @@ func (conn *Connector) Voltages() (float64, float64, float64, error) {
 		return 0, 0, 0, api.ErrTimeout
 	}
 
-	res, found, err := conn.phaseMeasurements(types.MeasurandVoltage, "-N")
-	if found {
-		return res[0], res[1], res[2], err
-	}
-
-	res, found, err = conn.phaseMeasurements(types.MeasurandVoltage, "")
-	if found {
-		return res[0], res[1], res[2], err
+	for _, suffix := range []types.Measurand{"-N", ""} {
+		if res, found, err := conn.phaseMeasurements(types.MeasurandVoltage, suffix); found {
+			return res[0], res[1], res[2], err
+		}
 	}
 
 	return 0, 0, 0, api.ErrNotAvailable

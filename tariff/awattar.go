@@ -39,6 +39,10 @@ func NewAwattarFromConfig(other map[string]interface{}) (api.Tariff, error) {
 		return nil, err
 	}
 
+	if err := cc.init(); err != nil {
+		return nil, err
+	}
+
 	t := &Awattar{
 		embed: &cc.embed,
 		log:   util.NewLogger("awattar"),
@@ -62,8 +66,14 @@ func (t *Awattar) run(done chan error) {
 	for ; true; <-tick.C {
 		var res awattar.Prices
 
+		// Awattar publishes prices for next day around 13:00 CET/CEST, so up to 35h of price data are available
+		// To be on the safe side request a window of -2h and +48h, the API doesn't mind requesting more than available
+		start := time.Now().Add(-2 * time.Hour).UnixMilli()
+		end := time.Now().Add(48 * time.Hour).UnixMilli()
+		uri := fmt.Sprintf("%s?start=%d&end=%d", t.uri, start, end)
+
 		if err := backoff.Retry(func() error {
-			return backoffPermanentError(client.GetJSON(t.uri, &res))
+			return backoffPermanentError(client.GetJSON(uri, &res))
 		}, bo()); err != nil {
 			once.Do(func() { done <- err })
 

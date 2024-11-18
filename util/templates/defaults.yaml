@@ -92,9 +92,21 @@ params:
     help:
       de: Akkukapazität in kWh
       en: Battery capacity in kWh
-    example: "50"
+    example: 50
     type: float
     usages: ["vehicle", "battery"]
+  - name: maxacpower
+    description:
+      de: Maximale AC Leistung des Hybrid-Wechselrichters
+      en: Maximum AC power of the hybrid inverter
+    help:
+      de: Maximale AC Leistung des Hybrid-Wechselrichters
+      en: Maximum AC power of the hybrid inverter
+    default: 0
+    example: 5000
+    type: float
+    usages: ["pv"]
+    advanced: true
   - name: vin
     description:
       de: Fahrzeugidentifikationsnummer
@@ -265,6 +277,14 @@ params:
     help:
       en: The AIN is printed on the type label on the back of the device. Embed it in double quotes in case of leading zeroes.
       de: Die AIN ist auf dem Typenschild auf der Geräterückseite aufgedruckt. Bei führenden Nullen bitte in doppelte Hochkommata setzen.
+  - name: coarsecurrent
+    type: bool
+    help:
+      en: 1A current control
+      de: 1A Ladestromvorgabe
+    description:
+      en: Vehicle supports 1A current steps only
+      de: Fahrzeug unterstützt nur 1A Schritte der Ladestromvorgabe
   - name: welcomecharge
     type: bool
     description:
@@ -321,6 +341,12 @@ presets:
         help:
           de: Zusätzlicher prozentualer Aufschlag (z.B. 0.2 für 20%)
           en: Additional percentage charge (e.g. 0.2 for 20%)
+      - name: formula
+        type: string
+        help:
+          de: Individuelle Formel zur Berechnung des Preises
+          en: Individual formula for calculating the price
+        example: "math.Max((price + charges) * (1 + tax), 0.0)"
   eebus:
     params:
       - name: ski
