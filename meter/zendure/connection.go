@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"dario.cat/mergo"
-	"github.com/evcc-io/evcc/provider/mqtt"
+	"github.com/evcc-io/evcc/plugin/mqtt"
 	"github.com/evcc-io/evcc/util"
 )
 
@@ -22,7 +22,7 @@ type Connection struct {
 	data *util.Monitor[Data]
 }
 
-func NewConnection(account, serial string, global bool, timeout time.Duration) (*Connection, error) {
+func NewConnection(region, account, serial string, timeout time.Duration) (*Connection, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -31,12 +31,12 @@ func NewConnection(account, serial string, global bool, timeout time.Duration) (
 		return conn, nil
 	}
 
-	res, err := MqttCredentials(account, serial, global)
+	log := util.NewLogger("zendure")
+	res, err := MqttCredentials(log, region, account, serial)
 	if err != nil {
 		return nil, err
 	}
 
-	log := util.NewLogger("zendure")
 	client, err := mqtt.NewClient(
 		log,
 		net.JoinHostPort(res.Data.MqttUrl, strconv.Itoa(res.Data.Port)), res.Data.AppKey, res.Data.Secret,
@@ -73,7 +73,7 @@ func (c *Connection) handler(data string) {
 	}
 
 	c.data.SetFunc(func(v Data) Data {
-		if err := mergo.Merge(&v, res.Data); err != nil {
+		if err := mergo.Merge(&v, res.Data, mergo.WithOverride); err != nil {
 			c.log.ERROR.Println(err)
 		}
 

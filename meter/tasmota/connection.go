@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/evcc-io/evcc/provider"
+	"github.com/evcc-io/evcc/plugin"
 	"github.com/evcc-io/evcc/util"
 	"github.com/evcc-io/evcc/util/request"
 	"github.com/evcc-io/evcc/util/transport"
@@ -18,8 +18,8 @@ type Connection struct {
 	*request.Helper
 	uri, user, password string
 	channels            []int
-	statusSnsG          provider.Cacheable[StatusSNSResponse]
-	statusStsG          provider.Cacheable[StatusSTSResponse]
+	statusSnsG          plugin.Cacheable[StatusSNSResponse]
+	statusStsG          plugin.Cacheable[StatusSTSResponse]
 }
 
 // NewConnection creates a Tasmota connection
@@ -50,22 +50,22 @@ func NewConnection(uri, user, password string, channels []int, cache time.Durati
 
 	c.Client.Transport = request.NewTripper(log, transport.Insecure())
 
-	c.statusSnsG = provider.ResettableCached(func() (StatusSNSResponse, error) {
+	c.statusSnsG = plugin.ResettableCached(func() (StatusSNSResponse, error) {
 		parameters := url.Values{
-			"user":     []string{c.user},
-			"password": []string{c.password},
-			"cmnd":     []string{"Status 8"},
+			"user":     {c.user},
+			"password": {c.password},
+			"cmnd":     {"Status 8"},
 		}
 		var res StatusSNSResponse
 		err := c.GetJSON(fmt.Sprintf("%s/cm?%s", c.uri, parameters.Encode()), &res)
 		return res, err
 	}, cache)
 
-	c.statusStsG = provider.ResettableCached(func() (StatusSTSResponse, error) {
+	c.statusStsG = plugin.ResettableCached(func() (StatusSTSResponse, error) {
 		parameters := url.Values{
-			"user":     []string{c.user},
-			"password": []string{c.password},
-			"cmnd":     []string{"Status 0"},
+			"user":     {c.user},
+			"password": {c.password},
+			"cmnd":     {"Status 0"},
 		}
 		var res StatusSTSResponse
 		err := c.GetJSON(fmt.Sprintf("%s/cm?%s", c.uri, parameters.Encode()), &res)
@@ -120,9 +120,9 @@ func (c *Connection) Enable(enable bool) error {
 		}
 
 		parameters := url.Values{
-			"user":     []string{c.user},
-			"password": []string{c.password},
-			"cmnd":     []string{cmd},
+			"user":     {c.user},
+			"password": {c.password},
+			"cmnd":     {cmd},
 		}
 
 		var res PowerResponse
