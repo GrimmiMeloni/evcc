@@ -77,13 +77,14 @@ jobs:
 
       - name: Delete old nightly.* tags
         run: |
-          old_tags=$(curl -s "https://hub.docker.com/v2/repositories/evcc/evcc/tags/?page_size=100" | jq -r '.results | map(select(.name | startswith("nightly."))) | sort_by(.last_updated) | reverse | .[1:] | .[].name')
+          old_tags=$(curl -s "https://hub.docker.com/v2/repositories/grimmimeloni/evcc/tags/?page_size=100" | jq -r '.results | map(select(.name | startswith("nightly."))) | sort_by(.last_updated) | reverse | .[1:] | .[].name')
           for tag in $old_tags; do
             echo "Deleting tag: $tag"
-            curl -s -H "Authorization: Bearer ${{ secrets.DOCKER_PASS }}" -X DELETE "https://hub.docker.com/v2/repositories/evcc/evcc/tags/$tag/"
+            curl -s -H "Authorization: Bearer ${{ secrets.DOCKER_PASS }}" -X DELETE "https://hub.docker.com/v2/repositories/grimmimeloni/evcc/tags/$tag/"
           done
 
   hassio:
+    if: false
     name: Hassio Addon :nightly
     needs:
       - docker
