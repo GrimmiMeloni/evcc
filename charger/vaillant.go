@@ -26,7 +26,6 @@ import (
 
 	"github.com/WulfgarW/sensonet"
 	"github.com/evcc-io/evcc/api"
-	"github.com/evcc-io/evcc/plugin"
 	"github.com/evcc-io/evcc/util"
 	"github.com/evcc-io/evcc/util/request"
 	"github.com/samber/lo"
@@ -44,7 +43,7 @@ type Vaillant struct {
 	systemId string
 }
 
-//go:generate decorate -f decorateVaillant -b *Vaillant -r api.Charger -t "api.Meter,CurrentPower,func() (float64, error)" -t "api.Battery,Soc,func() (float64, error)"
+//go:generate go tool decorate -f decorateVaillant -b *Vaillant -r api.Charger -t "api.Meter,CurrentPower,func() (float64, error)" -t "api.Battery,Soc,func() (float64, error)"
 
 // NewVaillantFromConfig creates an Vaillant configurable charger from generic config
 func NewVaillantFromConfig(ctx context.Context, other map[string]interface{}) (api.Charger, error) {
@@ -113,7 +112,7 @@ func NewVaillantFromConfig(ctx context.Context, other map[string]interface{}) (a
 		}
 	}
 
-	sgr, err := NewSgReady(ctx, &cc.embed, set, nil, nil, cc.Phases)
+	sgr, err := NewSgReady(ctx, &cc.embed, set, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +126,7 @@ func NewVaillantFromConfig(ctx context.Context, other map[string]interface{}) (a
 
 	var power func() (float64, error)
 	if devices, _ := conn.GetMpcData(systemId); len(devices) > 0 {
-		power = plugin.Cached(func() (float64, error) {
+		power = util.Cached(func() (float64, error) {
 			res, err := conn.GetMpcData(systemId)
 			return lo.SumBy(res, func(d sensonet.MpcDevice) float64 {
 				return d.CurrentPower
@@ -153,7 +152,7 @@ func NewVaillantFromConfig(ctx context.Context, other map[string]interface{}) (a
 
 	var temp func() (float64, error)
 	if !heating || heatingTempSensor {
-		temp = plugin.Cached(func() (float64, error) {
+		temp = util.Cached(func() (float64, error) {
 			system, err := conn.GetSystem(systemId)
 			if err != nil {
 				return 0, err

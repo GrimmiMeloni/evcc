@@ -65,7 +65,7 @@ func init() {
 
 	// global options
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "Config file (default \"~/evcc.yaml\" or \"/etc/evcc.yaml\")")
-	rootCmd.PersistentFlags().StringVarP(&cfgDatabase, "database", "d", "", "Database location (default \"~/.evcc/evcc.db\")")
+	rootCmd.PersistentFlags().StringVar(&cfgDatabase, "database", "", "Database location (default \"~/.evcc/evcc.db\")")
 	rootCmd.PersistentFlags().BoolP("help", "h", false, "Help")
 	rootCmd.PersistentFlags().Bool(flagHeaders, false, flagHeadersDescription)
 	rootCmd.PersistentFlags().Bool(flagIgnoreDatabase, false, flagIgnoreDatabaseDescription)
@@ -205,10 +205,20 @@ func runRoot(cmd *cobra.Command, args []string) {
 		if err == nil && influx != nil {
 			// eliminate duplicate values
 			dedupe := pipe.NewDeduplicator(30*time.Minute,
-				keys.VehicleSoc, keys.VehicleRange, keys.VehicleOdometer,
-				keys.ChargedEnergy, keys.ChargeRemainingEnergy)
+				keys.VehicleSoc,
+				keys.VehicleRange,
+				keys.VehicleOdometer,
+				keys.TariffCo2,
+				keys.TariffCo2Home,
+				keys.TariffCo2Loadpoints,
+				keys.TariffFeedIn,
+				keys.TariffGrid,
+				keys.TariffPriceHome,
+				keys.TariffPriceLoadpoints,
+				keys.ChargedEnergy,
+				keys.ChargeRemainingEnergy)
 			go influx.Run(site, dedupe.Pipe(
-				pipe.NewDropper(append(ignoreLogs, ignoreEmpty)...).Pipe(tee.Attach()),
+				pipe.NewDropper(append(ignoreLogs, ignoreEmpty, keys.Forecast)...).Pipe(tee.Attach()),
 			))
 		}
 	}
@@ -247,7 +257,7 @@ func runRoot(cmd *cobra.Command, args []string) {
 	valueChan <- util.Param{Key: keys.Hems, Val: conf.HEMS}
 	valueChan <- util.Param{Key: keys.Influx, Val: conf.Influx}
 	valueChan <- util.Param{Key: keys.Interval, Val: conf.Interval}
-	valueChan <- util.Param{Key: keys.Messaging, Val: pushChan != nil}
+	valueChan <- util.Param{Key: keys.Messaging, Val: conf.Messaging.Configured()}
 	valueChan <- util.Param{Key: keys.ModbusProxy, Val: conf.ModbusProxy}
 	valueChan <- util.Param{Key: keys.Mqtt, Val: conf.Mqtt}
 	valueChan <- util.Param{Key: keys.Network, Val: conf.Network}
@@ -290,7 +300,8 @@ func runRoot(cmd *cobra.Command, args []string) {
 
 	httpd.RegisterSystemHandler(valueChan, cache, auth, func() {
 		log.INFO.Println("evcc was stopped by user. OS should restart the service. Or restart manually.")
-		once.Do(func() { close(stopC) }) // signal loop to end
+		err = errors.New("restart required") // https://gokrazy.org/development/process-interface/
+		once.Do(func() { close(stopC) })     // signal loop to end
 	})
 
 	// show and check version, reduce api load during development
