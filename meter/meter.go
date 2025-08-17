@@ -22,15 +22,17 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]interface{}
 		measurement.Energy `mapstructure:",squash"` // energy optional
 		measurement.Phases `mapstructure:",squash"` // optional
 
+		// pv
+		pvMaxACPower `mapstructure:",squash"`
+
 		// battery
-		capacity    `mapstructure:",squash"`
-		maxpower    `mapstructure:",squash"`
-		battery     `mapstructure:",squash"`
-		Soc         *plugin.Config // optional
-		LimitSoc    *plugin.Config // optional
-		BatteryMode *plugin.Config // optional
+		batteryCapacity  `mapstructure:",squash"`
+		batterySocLimits `mapstructure:",squash"`
+		Soc              *plugin.Config // optional
+		LimitSoc         *plugin.Config // optional
+		BatteryMode      *plugin.Config // optional
 	}{
-		battery: battery{
+		batterySocLimits: batterySocLimits{
 			MinSoc: 20,
 			MaxSoc: 95,
 		},
@@ -67,7 +69,7 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]interface{}
 			return nil, fmt.Errorf("battery limit soc: %w", err)
 		}
 
-		batModeS = cc.battery.LimitController(socG, limitSocS)
+		batModeS = cc.batterySocLimits.LimitController(socG, limitSocS)
 
 	case cc.BatteryMode != nil:
 		modeS, err := cc.BatteryMode.IntSetter(ctx, "batteryMode")
@@ -80,7 +82,7 @@ func NewConfigurableFromConfig(ctx context.Context, other map[string]interface{}
 		}
 	}
 
-	res := m.Decorate(energyG, currentsG, voltagesG, powersG, socG, cc.capacity.Decorator(), cc.maxpower.Decorator(), batModeS)
+	res := m.Decorate(energyG, currentsG, voltagesG, powersG, socG, cc.batteryCapacity.Decorator(), cc.pvMaxACPower.Decorator(), batModeS)
 
 	return res, nil
 }
@@ -101,9 +103,7 @@ type Meter struct {
 // Decorate attaches additional capabilities to the base meter
 func (m *Meter) Decorate(
 	totalEnergy func() (float64, error),
-	currents func() (float64, float64, float64, error),
-	voltages func() (float64, float64, float64, error),
-	powers func() (float64, float64, float64, error),
+	currents, voltages, powers func() (float64, float64, float64, error),
 	batterySoc func() (float64, error),
 	batteryCapacity func() float64,
 	maxACPower func() float64,

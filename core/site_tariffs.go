@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/json"
 	"maps"
 	"math"
 	"slices"
@@ -11,8 +10,22 @@ import (
 	"github.com/evcc-io/evcc/core/keys"
 	"github.com/evcc-io/evcc/server/db/settings"
 	"github.com/evcc-io/evcc/tariff"
+	"github.com/jinzhu/now"
 	"github.com/samber/lo"
 )
+
+type solarDetails struct {
+	Scale            *float64     `json:"scale,omitempty"`            // scale factor yield/forecasted today
+	Today            dailyDetails `json:"today,omitempty"`            // tomorrow
+	Tomorrow         dailyDetails `json:"tomorrow,omitempty"`         // tomorrow
+	DayAfterTomorrow dailyDetails `json:"dayAfterTomorrow,omitempty"` // day after tomorrow
+	Timeseries       []tsEntry    `json:"timeseries,omitempty"`       // timeseries of forecasted energy
+}
+
+type dailyDetails struct {
+	Yield    float64 `json:"energy"`
+	Complete bool    `json:"complete"`
+}
 
 // greenShare returns
 //   - the current green share, calculated for the part of the consumption between powerFrom and powerTo
@@ -57,64 +70,6 @@ func (site *Site) effectiveCo2(greenShare float64) *float64 {
 	return nil
 }
 
-// accumulatedEnergy calculates the energy consumption between from and to,
-// assuming the rates containing the power at given timestamp.
-// Result is in Wh
-func accumulatedEnergy(rr timeseries, from, to time.Time) float64 {
-	var energy float64
-	var last tsValue
-
-	for _, r := range rr {
-		// fmt.Println(r.Start.Local().Format(time.RFC3339), r.End.Local().Format(time.RFC3339), r.Price)
-
-		if !r.Timestamp.After(from) {
-			last = r
-			continue
-		}
-
-		start := last.Timestamp
-		if start.Before(from) {
-			start = from
-		}
-
-		end := r.Timestamp
-		if end.After(to) {
-			end = to
-		}
-
-		energy += (r.Value + last.Value) / 2 * end.Sub(start).Hours()
-
-		if !r.Timestamp.Before(to) {
-			break
-		}
-
-		last = r
-	}
-
-	return energy
-}
-
-type (
-	timeseries []tsValue
-	tsValue    struct {
-		Timestamp time.Time `json:"ts"`
-		Value     float64   `json:"val"`
-	}
-)
-
-func (rr *timeseries) MarshalJSON() ([]byte, error) {
-	return json.Marshal(rr)
-}
-
-func timestampSeries(rr api.Rates) timeseries {
-	return lo.Map(rr, func(r api.Rate, _ int) tsValue {
-		return tsValue{
-			Timestamp: r.Start,
-			Value:     r.Price,
-		}
-	})
-}
-
 func (site *Site) publishTariffs(greenShareHome float64, greenShareLoadpoints float64) {
 	site.publish(keys.GreenShareHome, greenShareHome)
 	site.publish(keys.GreenShareLoadpoints, greenShareLoadpoints)
@@ -144,76 +99,83 @@ func (site *Site) publishTariffs(greenShareHome float64, greenShareLoadpoints fl
 		site.publish(keys.TariffCo2Loadpoints, v)
 	}
 
-	type dailyDetails struct {
-		Yield    float64 `json:"energy"`
-		Complete bool    `json:"complete"`
-	}
-
-	type solarDetails struct {
-		Scale            *float64     `json:"scale,omitempty"`            // scale factor yield/forecasted today
-		Today            dailyDetails `json:"today,omitempty"`            // tomorrow
-		Tomorrow         dailyDetails `json:"tomorrow,omitempty"`         // tomorrow
-		DayAfterTomorrow dailyDetails `json:"dayAfterTomorrow,omitempty"` // day after tomorrow
-		Timeseries       timeseries   `json:"timeseries,omitempty"`       // timeseries of forecasted energy
-	}
-
 	fc := struct {
-		Co2    api.Rates    `json:"co2,omitempty"`
-		FeedIn api.Rates    `json:"feedin,omitempty"`
-		Grid   api.Rates    `json:"grid,omitempty"`
-		Solar  solarDetails `json:"solar,omitempty"`
+		Co2     api.Rates     `json:"co2,omitempty"`
+		FeedIn  api.Rates     `json:"feedin,omitempty"`
+		Grid    api.Rates     `json:"grid,omitempty"`
+		Planner api.Rates     `json:"planner,omitempty"`
+		Solar   *solarDetails `json:"solar,omitempty"`
 	}{
-		Co2:    tariff.Forecast(site.GetTariff(api.TariffUsageCo2)),
-		FeedIn: tariff.Forecast(site.GetTariff(api.TariffUsageFeedIn)),
-		Grid:   tariff.Forecast(site.GetTariff(api.TariffUsageGrid)),
+		Co2:     tariff.Forecast(site.GetTariff(api.TariffUsageCo2)),
+		FeedIn:  tariff.Forecast(site.GetTariff(api.TariffUsageFeedIn)),
+		Planner: tariff.Forecast(site.GetTariff(api.TariffUsagePlanner)),
+		Grid:    tariff.Forecast(site.GetTariff(api.TariffUsageGrid)),
 	}
 
 	// calculate adjusted solar forecast
-	solar := timestampSeries(tariff.Forecast(site.GetTariff(api.TariffUsageSolar)))
-	if len(solar) > 0 {
-		fc.Solar.Timeseries = solar
-
-		last := solar[len(solar)-1].Timestamp
-
-		bod := beginningOfDay(time.Now())
-		eod := bod.AddDate(0, 0, 1)
-		eot := eod.AddDate(0, 0, 1)
-
-		remainingToday := accumulatedEnergy(solar, time.Now(), eod)
-		tomorrow := accumulatedEnergy(solar, eod, eot)
-		dayAfterTomorrow := accumulatedEnergy(solar, eot, eot.AddDate(0, 0, 1))
-
-		fc.Solar.Today = dailyDetails{
-			Yield:    remainingToday,
-			Complete: !last.Before(eod),
-		}
-		fc.Solar.Tomorrow = dailyDetails{
-			Yield:    tomorrow,
-			Complete: !last.Before(eot),
-		}
-		fc.Solar.DayAfterTomorrow = dailyDetails{
-			Yield:    dayAfterTomorrow,
-			Complete: !last.Before(eot.AddDate(0, 0, 1)),
-		}
-
-		// accumulate forecasted energy since last update
-		site.fcstEnergy.AddEnergy(accumulatedEnergy(solar, site.fcstEnergy.updated, time.Now()) / 1e3)
-		settings.SetFloat(keys.SolarAccForecast, site.fcstEnergy.Accumulated)
-
-		produced := lo.SumBy(slices.Collect(maps.Values(site.pvEnergy)), func(v *meterEnergy) float64 {
-			return v.AccumulatedEnergy()
-		})
-
-		if fcst := site.fcstEnergy.AccumulatedEnergy(); fcst > 0 {
-			scale := produced / fcst
-			site.log.DEBUG.Printf("solar forecast: accumulated %.1fkWh, produced %.1fkWh, scale %.1f", fcst, produced, scale)
-
-			const minEnergy = 0.1
-			if produced > minEnergy && fcst > minEnergy { /*kWh*/
-				fc.Solar.Scale = lo.ToPtr(scale)
-			}
-		}
+	if solar := tariff.Forecast(site.GetTariff(api.TariffUsageSolar)); len(solar) > 0 {
+		fc.Solar = lo.ToPtr(site.solarDetails(solar))
 	}
 
 	site.publish(keys.Forecast, fc)
+}
+
+func (site *Site) solarDetails(solar api.Rates) solarDetails {
+	res := solarDetails{
+		Timeseries: solarTimeseries(solar),
+	}
+
+	last := solar[len(solar)-1].Start
+
+	bod := now.BeginningOfDay()
+	eod := bod.AddDate(0, 0, 1)
+	eot := eod.AddDate(0, 0, 1)
+
+	remainingToday := solarEnergy(solar, time.Now(), eod)
+	tomorrow := solarEnergy(solar, eod, eot)
+	dayAfterTomorrow := solarEnergy(solar, eot, eot.AddDate(0, 0, 1))
+
+	res.Today = dailyDetails{
+		Yield:    remainingToday,
+		Complete: !last.Before(eod),
+	}
+	res.Tomorrow = dailyDetails{
+		Yield:    tomorrow,
+		Complete: !last.Before(eot),
+	}
+	res.DayAfterTomorrow = dailyDetails{
+		Yield:    dayAfterTomorrow,
+		Complete: !last.Before(eot.AddDate(0, 0, 1)),
+	}
+
+	// accumulate forecasted energy since last update
+	energy := solarEnergy(solar, site.fcstEnergy.updated, time.Now()) / 1e3
+	site.log.DEBUG.Printf("solar forecast: accumulated %.3fWh from %v to %v",
+		energy, site.fcstEnergy.updated.Truncate(time.Second), time.Now().Truncate(time.Second),
+	)
+
+	site.fcstEnergy.AddEnergy(energy)
+	settings.SetFloat(keys.SolarAccForecast, site.fcstEnergy.Accumulated)
+
+	produced := lo.SumBy(slices.Collect(maps.Values(site.pvEnergy)), func(v *meterEnergy) float64 {
+		return v.AccumulatedEnergy()
+	})
+	site.log.DEBUG.Printf("solar forecast: produced %.3f", produced)
+
+	if fcst := site.fcstEnergy.AccumulatedEnergy(); fcst > 0 {
+		scale := produced / fcst
+		site.log.DEBUG.Printf("solar forecast: accumulated %.3fkWh, produced %.3fkWh, scale %.3f", fcst, produced, scale)
+
+		const minEnergy = 0.5 // kWh
+		if produced+fcst > minEnergy {
+			res.Scale = lo.ToPtr(scale)
+		}
+	}
+
+	return res
+}
+
+func (site *Site) isDynamicTariff(usage api.TariffUsage) bool {
+	tariff := site.GetTariff(usage)
+	return tariff != nil && tariff.Type() != api.TariffTypePriceStatic
 }

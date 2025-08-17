@@ -10,15 +10,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/util"
-	"github.com/mlnoga/rct"
+	"github.com/evcc-io/rct"
+	"golang.org/x/sync/errgroup"
 )
 
 // RCT implements the api.Meter interface
 type RCT struct {
-	conn  *rct.Connection // connection with the RCT device
-	usage string          // grid, pv, battery
+	conn          *rct.Connection // connection with the RCT device
+	usage         string          // grid, pv, battery
+	externalPower bool            // whether to query external power
 }
 
 var (
@@ -35,12 +38,19 @@ func init() {
 // NewRCTFromConfig creates an RCT from generic config
 func NewRCTFromConfig(ctx context.Context, other map[string]interface{}) (api.Meter, error) {
 	cc := struct {
-		capacity       `mapstructure:",squash"`
-		Uri, Usage     string
-		MinSoc, MaxSoc int
-		Cache          time.Duration
+		batteryCapacity  `mapstructure:",squash"`
+		batterySocLimits `mapstructure:",squash"`
+		Uri, Usage       string
+		MaxChargePower   int
+		ExternalPower    bool
+		Cache            time.Duration
 	}{
-		Cache: time.Second,
+		batterySocLimits: batterySocLimits{
+			MinSoc: 20,
+			MaxSoc: 95,
+		},
+		MaxChargePower: 10000,
+		Cache:          30 * time.Second,
 	}
 
 	if err := util.DecodeOther(other, &cc); err != nil {
@@ -51,11 +61,11 @@ func NewRCTFromConfig(ctx context.Context, other map[string]interface{}) (api.Me
 		return nil, errors.New("missing usage")
 	}
 
-	return NewRCT(ctx, cc.Uri, cc.Usage, cc.MinSoc, cc.MaxSoc, cc.Cache, cc.capacity.Decorator())
+	return NewRCT(ctx, cc.Uri, cc.Usage, cc.batterySocLimits, cc.MaxChargePower, cc.Cache, cc.ExternalPower, cc.batteryCapacity.Decorator())
 }
 
 // NewRCT creates an RCT meter
-func NewRCT(ctx context.Context, uri, usage string, minSoc, maxSoc int, cache time.Duration, capacity func() float64) (api.Meter, error) {
+func NewRCT(ctx context.Context, uri, usage string, batterySocLimits batterySocLimits, maxchargepower int, cache time.Duration, externalPower bool, capacity func() float64) (api.Meter, error) {
 	log := util.NewLogger("rct")
 
 	// re-use connections
@@ -78,8 +88,9 @@ func NewRCT(ctx context.Context, uri, usage string, minSoc, maxSoc int, cache ti
 	rctMu.Unlock()
 
 	m := &RCT{
-		usage: strings.ToLower(usage),
-		conn:  conn,
+		usage:         strings.ToLower(usage),
+		conn:          conn,
+		externalPower: externalPower,
 	}
 
 	// decorate api.MeterEnergy
@@ -88,7 +99,7 @@ func NewRCT(ctx context.Context, uri, usage string, minSoc, maxSoc int, cache ti
 		totalEnergy = m.totalEnergy
 	}
 
-	// decorate api.BatterySoc
+	// decorate api.Battery
 	var batterySoc func() (float64, error)
 	var batteryMode func(api.BatteryMode) error
 	if usage == "battery" {
@@ -113,7 +124,7 @@ func NewRCT(ctx context.Context, uri, usage string, minSoc, maxSoc int, cache ti
 					return err
 				}
 
-				if err := m.conn.Write(rct.BatterySoCTargetMin, m.floatVal(float32(minSoc)/100)); err != nil {
+				if err := m.conn.Write(rct.BatterySoCTargetMin, m.floatVal(float32(batterySocLimits.MinSoc)/100)); err != nil {
 					return err
 				}
 
@@ -124,14 +135,14 @@ func NewRCT(ctx context.Context, uri, usage string, minSoc, maxSoc int, cache ti
 					return err
 				}
 
-				return m.conn.Write(rct.BatterySoCTargetMin, m.floatVal(float32(maxSoc)/100))
+				return m.conn.Write(rct.BatterySoCTargetMin, m.floatVal(float32(batterySocLimits.MaxSoc)/100))
 
 			case api.BatteryCharge:
 				if err := m.conn.Write(rct.PowerMngUseGridPowerEnable, []byte{1}); err != nil {
 					return err
 				}
 
-				if err := m.conn.Write(rct.PowerMngBatteryPowerExternW, m.floatVal(float32(-10_000))); err != nil {
+				if err := m.conn.Write(rct.PowerMngBatteryPowerExternW, m.floatVal(float32(-maxchargepower))); err != nil {
 					return err
 				}
 
@@ -159,15 +170,30 @@ func (m *RCT) CurrentPower() (float64, error) {
 		return m.queryFloat(rct.TotalGridPowerW)
 
 	case "pv":
-		a, err := m.queryFloat(rct.SolarGenAPowerW)
-		if err != nil {
-			return 0, err
+		var eg errgroup.Group
+		var a, b, c float64
+
+		eg.Go(func() error {
+			var err error
+			a, err = m.queryFloat(rct.SolarGenAPowerW)
+			return err
+		})
+
+		eg.Go(func() error {
+			var err error
+			b, err = m.queryFloat(rct.SolarGenBPowerW)
+			return err
+		})
+
+		if m.externalPower {
+			eg.Go(func() error {
+				var err error
+				c, err = m.queryFloat(rct.S0ExternalPowerW)
+				return err
+			})
 		}
-		b, err := m.queryFloat(rct.SolarGenBPowerW)
-		if err != nil {
-			return 0, err
-		}
-		c, err := m.queryFloat(rct.S0ExternalPowerW)
+
+		err := eg.Wait()
 		return a + b + c, err
 
 	case "battery":
@@ -186,19 +212,41 @@ func (m *RCT) totalEnergy() (float64, error) {
 		return res / 1000, err
 
 	case "pv":
-		a, err := m.queryFloat(rct.TotalEnergySolarGenAWh)
-		if err != nil {
-			return 0, err
-		}
-		b, err := m.queryFloat(rct.TotalEnergySolarGenBWh)
+		var eg errgroup.Group
+		var a, b float64
+
+		eg.Go(func() error {
+			var err error
+			a, err = m.queryFloat(rct.TotalEnergySolarGenAWh)
+			return err
+		})
+
+		eg.Go(func() error {
+			var err error
+			b, err = m.queryFloat(rct.TotalEnergySolarGenBWh)
+			return err
+		})
+
+		err := eg.Wait()
 		return (a + b) / 1000, err
 
 	case "battery":
-		in, err := m.queryFloat(rct.TotalEnergyBattInWh)
-		if err != nil {
-			return 0, err
-		}
-		out, err := m.queryFloat(rct.TotalEnergyBattOutWh)
+		var eg errgroup.Group
+		var in, out float64
+
+		eg.Go(func() error {
+			var err error
+			in, err = m.queryFloat(rct.TotalEnergyBattInWh)
+			return err
+		})
+
+		eg.Go(func() error {
+			var err error
+			out, err = m.queryFloat(rct.TotalEnergyBattOutWh)
+			return err
+		})
+
+		err := eg.Wait()
 		return (in - out) / 1000, err
 
 	default:
@@ -212,13 +260,25 @@ func (m *RCT) batterySoc() (float64, error) {
 	return res * 100, err
 }
 
+func (m *RCT) bo() *backoff.ExponentialBackOff {
+	return backoff.NewExponentialBackOff(
+		backoff.WithInitialInterval(500*time.Millisecond),
+		backoff.WithMaxInterval(2*time.Second),
+		backoff.WithMaxElapsedTime(10*time.Second))
+}
+
 // queryFloat adds retry logic of recoverable errors to QueryFloat32
 func (m *RCT) queryFloat(id rct.Identifier) (float64, error) {
-	res, err := m.conn.QueryFloat32(id)
+	res, err := backoff.RetryWithData(func() (float32, error) {
+		return m.conn.QueryFloat32(id)
+	}, m.bo())
 	return float64(res), err
 }
 
 // queryInt32 adds retry logic of recoverable errors to QueryInt32
 func (m *RCT) queryInt32(id rct.Identifier) (int32, error) {
-	return m.conn.QueryInt32(id)
+	res, err := backoff.RetryWithData(func() (int32, error) {
+		return m.conn.QueryInt32(id)
+	}, m.bo())
+	return res, err
 }

@@ -25,9 +25,11 @@
 	</div>
 </template>
 <script>
-import formatter, { POWER_UNIT } from "../../mixins/formatter";
+import formatter, { POWER_UNIT } from "@/mixins/formatter";
 
 const NO_TRUNCATE = ["phasePowers", "phaseVoltages", "phaseCurrents"];
+
+const HIDDEN_TAGS = ["icon", "heating", "integratedDevice"];
 
 export default {
 	name: "DeviceTags",
@@ -37,11 +39,11 @@ export default {
 	},
 	computed: {
 		entries() {
-			return Object.entries(this.tags).map(
-				([name, { value, error, warning, muted, options }]) => {
+			return Object.entries(this.tags)
+				.filter(([name]) => !HIDDEN_TAGS.includes(name))
+				.map(([name, { value, error, warning, muted, options }]) => {
 					return { name, value, error, warning, muted, options };
-				}
-			);
+				});
 		},
 	},
 	methods: {
@@ -52,6 +54,7 @@ export default {
 			}
 			switch (name) {
 				case "power":
+				case "solarForecast":
 					return this.fmtW(value);
 				case "energy":
 				case "capacity":
@@ -61,6 +64,7 @@ export default {
 				case "vehicleLimitSoc":
 					return this.fmtPercentage(value, 1);
 				case "temp":
+				case "heaterTempLimit":
 					return this.fmtTemperature(value);
 				case "odometer":
 				case "range":
@@ -72,7 +76,7 @@ export default {
 				case "phasePowers":
 					return value.map((v) => this.fmtW(v, POWER_UNIT.KW, false)).join(" · ") + " kW";
 				case "chargeStatus":
-					return this.$t(`config.deviceValue.chargeStatus${value}`);
+					return value ? this.$t(`config.deviceValue.chargeStatus${value}`) : "-";
 				case "gridPrice":
 				case "feedinPrice":
 					return this.fmtPricePerKWh(value, options.currency, true);

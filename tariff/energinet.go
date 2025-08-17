@@ -53,11 +53,7 @@ func NewEnerginetFromConfig(other map[string]interface{}) (api.Tariff, error) {
 		data:   util.NewMonitor[api.Rates](2 * time.Hour),
 	}
 
-	done := make(chan error)
-	go t.run(done)
-	err := <-done
-
-	return t, err
+	return runOrError(t)
 }
 
 func (t *Energinet) run(done chan error) {
@@ -88,7 +84,7 @@ func (t *Energinet) run(done chan error) {
 			ar := api.Rate{
 				Start: ts.Local(),
 				End:   ts.Add(time.Hour).Local(),
-				Price: t.totalPrice(r.SpotPriceDKK/1e3, ts),
+				Value: t.totalPrice(r.SpotPriceDKK/1e3, ts),
 			}
 			data = append(data, ar)
 		}

@@ -36,7 +36,7 @@ type Connector struct {
 	meterInterval time.Duration
 }
 
-func NewConnector(log *util.Logger, id int, cp *CP, idTag string, meterInterval time.Duration) (*Connector, error) {
+func NewConnector(ctx context.Context, log *util.Logger, id int, cp *CP, idTag string, meterInterval time.Duration) (*Connector, error) {
 	conn := &Connector{
 		log:          log,
 		cp:           cp,
@@ -52,6 +52,12 @@ func NewConnector(log *util.Logger, id int, cp *CP, idTag string, meterInterval 
 	if err := cp.registerConnector(id, conn); err != nil {
 		return nil, err
 	}
+
+	go func() {
+		// deregister connector when the context is cancelled
+		<-ctx.Done()
+		cp.deregisterConnector(conn.id)
+	}()
 
 	// trigger status for all connectors
 
@@ -324,7 +330,7 @@ func (conn *Connector) TotalEnergy() (float64, error) {
 	// fallback for missing total energy
 	for _, suffix := range []types.Measurand{"", "-N"} {
 		if res, found, err := conn.phaseMeasurements(types.MeasurandEnergyActiveImportRegister, suffix); found {
-			return res[0] + res[1] + res[2], err
+			return (res[0] + res[1] + res[2]) / 1e3, err
 		}
 	}
 
