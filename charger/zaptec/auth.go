@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/evcc-io/evcc/util/oauth"
 	"golang.org/x/oauth2"
 )
 
@@ -23,10 +24,9 @@ func (p *passwordTokenSource) Token() (*oauth2.Token, error) {
 	return p.config.PasswordCredentialsToken(p.ctx, p.user, p.pass)
 }
 
-// tokenSourceCache stores per-user token sources
 var (
-	tokenSourceMu    sync.Mutex
-	tokenSourceCache = make(map[string]oauth2.TokenSource)
+	// TokenSourceCache stores per-user token sources
+	TokenSourceCache = oauth.NewTokenSourceCache()
 
 	oidcProvider     *oidc.Provider
 	oidcProviderOnce sync.Once
@@ -45,11 +45,8 @@ func getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 // Multiple chargers using the same user credentials will share the same TokenSource,
 // ensuring tokens are reused and authentication is deduplicated.
 func GetTokenSource(ctx context.Context, user, pass string) (oauth2.TokenSource, error) {
-	tokenSourceMu.Lock()
-	defer tokenSourceMu.Unlock()
-
-	// Use username as the cache key (assuming username is unique)
-	if ts, exists := tokenSourceCache[user]; exists {
+	// Check if token source exists in cache
+	if ts, exists := TokenSourceCache.Get(user, pass); exists {
 		return ts, nil
 	}
 
@@ -82,7 +79,7 @@ func GetTokenSource(ctx context.Context, user, pass string) (oauth2.TokenSource,
 
 	// Wrap with ReuseTokenSource to cache tokens
 	ts := oauth2.ReuseTokenSource(token, pts)
-	tokenSourceCache[user] = ts
+	TokenSourceCache.Set(user, pass, ts)
 
 	return ts, nil
 }

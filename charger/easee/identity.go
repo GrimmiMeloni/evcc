@@ -38,8 +38,18 @@ type tokenSource struct {
 	user, password string
 }
 
-// TokenSource creates an Easee token source
-func TokenSource(log *util.Logger, user, password string) (oauth2.TokenSource, error) {
+// TokenSourceCache stores per-user token sources
+var TokenSourceCache = oauth.NewTokenSourceCache()
+
+// GetTokenSource returns a shared oauth2.TokenSource for the given user credentials.
+// Multiple chargers using the same user credentials will share the same TokenSource,
+// ensuring tokens are reused and authentication is deduplicated.
+func GetTokenSource(log *util.Logger, user, password string) (oauth2.TokenSource, error) {
+	// Check if token source exists in cache
+	if ts, exists := TokenSourceCache.Get(user, password); exists {
+		return ts, nil
+	}
+
 	c := &tokenSource{
 		Helper:   request.NewHelper(log),
 		user:     user,
@@ -47,8 +57,14 @@ func TokenSource(log *util.Logger, user, password string) (oauth2.TokenSource, e
 	}
 
 	token, err := c.authenticate()
+	if err != nil {
+		return nil, err
+	}
 
-	return oauth.RefreshTokenSource(token.AsOAuth2Token(), c), err
+	ts := oauth.RefreshTokenSource(token.AsOAuth2Token(), c)
+	TokenSourceCache.Set(user, password, ts)
+
+	return ts, nil
 }
 
 func (c *tokenSource) authenticate() (*Token, error) {
