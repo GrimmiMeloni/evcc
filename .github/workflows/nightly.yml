@@ -36,7 +36,7 @@ jobs:
       ${{ needs.check_date.outputs.should_run != 'false' }}
       && startsWith(github.ref, 'refs/heads/master')
       && ! contains(github.head_ref, 'refs/heads/chore/')
-    uses: evcc-io/evcc/.github/workflows/default.yml@master
+    uses: grimmimeloni/evcc/.github/workflows/default.yml@master
     permissions:
       contents: read
       actions: write
@@ -73,32 +73,16 @@ jobs:
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Define tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: grimmimeloni/evcc
-          tags: |
-            type=raw,value=nightly
-            type=raw,value=nightly.{{date 'YYYYMMDD'}}-{{sha}}
-
       - name: Publish
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v6
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            grimmimeloni/evcc:nightly
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Delete old nightly.* tags
-        run: |
-          old_tags=$(curl -s "https://hub.docker.com/v2/repositories/grimmimeloni/evcc/tags/?page_size=100" | jq -r '.results | map(select(.name | startswith("nightly."))) | sort_by(.last_updated) | reverse | .[1:] | .[].name')
-          for tag in $old_tags; do
-            echo "Deleting tag: $tag"
-            curl -s -H "Authorization: Bearer ${{ secrets.DOCKER_PASS }}" -X DELETE "https://hub.docker.com/v2/repositories/grimmimeloni/evcc/tags/$tag/"
-          done
 
   hassio:
     if: false
