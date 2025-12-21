@@ -10,7 +10,7 @@ on:
 jobs:
   clean:
     name: Clean
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -50,7 +50,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -88,7 +88,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -119,7 +119,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -161,7 +161,7 @@ jobs:
     permissions:
       contents: read
       actions: write
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
@@ -203,7 +203,7 @@ jobs:
 
   integration:
     name: Integration
-    runs-on: depot-ubuntu-24.04-arm-16
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
