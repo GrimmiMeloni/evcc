@@ -8,7 +8,7 @@ type batteryCapacity struct {
 
 // var _ api.BatteryCapacity = (*batteryCapacity)(nil)
 
-// Decorator returns the capacity decorator
+// Decorator returns an api.BatteryCapacity decorator
 func (m *batteryCapacity) Decorator() func() float64 {
 	if m.Capacity == 0 {
 		return nil
@@ -18,8 +18,35 @@ func (m *batteryCapacity) Decorator() func() float64 {
 	}
 }
 
+type batteryPowerLimits struct {
+	MaxChargePower    float64
+	MaxDischargePower float64
+}
+
+// var _ api.BatteryPowerLimiter = (*batteryPowerLimits)(nil)
+
+// Decorator returns an api.BatteryPowerLimiter decorator
+func (m *batteryPowerLimits) Decorator() func() (float64, float64) {
+	if m.MaxChargePower == 0 || m.MaxDischargePower == 0 {
+		return nil
+	}
+	return func() (float64, float64) {
+		return m.MaxChargePower, m.MaxDischargePower
+	}
+}
+
 type batterySocLimits struct {
 	MinSoc, MaxSoc float64
+}
+
+// Decorator returns an api.BatterySocLimiter decorator
+func (m *batterySocLimits) Decorator() func() (float64, float64) {
+	if m.MinSoc == 0 && m.MaxSoc == 0 {
+		return nil
+	}
+	return func() (float64, float64) {
+		return m.MinSoc, m.MaxSoc
+	}
 }
 
 // LimitController returns an api.BatteryController decorator

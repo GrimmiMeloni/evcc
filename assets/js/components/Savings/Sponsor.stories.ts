@@ -20,6 +20,14 @@ export default {
       control: "boolean",
       description: "Whether the sponsorship is expiring soon",
     },
+    token: {
+      control: "text",
+      description: "Sponsor token (optional)",
+    },
+    fromYaml: {
+      control: "boolean",
+      description: "Whether the sponsor config comes from YAML",
+    },
   },
 } as Meta<typeof Sponsor>;
 
@@ -38,23 +46,25 @@ NoSponsor.args = {};
 
 export const Trial = Template.bind({});
 Trial.args = {
-  name: "trial",
+  status: { name: "trial" },
 };
 
 export const IndividualSponsor = Template.bind({});
 IndividualSponsor.args = {
-  name: "naltatis",
+  status: { name: "naltatis" },
 };
 
 export const VictronDevice = Template.bind({});
 VictronDevice.args = {
-  name: "victron",
+  status: { name: "victron" },
 };
 
 // Add an extra story showing the expiring state
 export const ExpiringSponsor = Template.bind({});
 ExpiringSponsor.args = {
-  name: "naltatis",
-  expiresSoon: true,
-  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+  status: {
+    name: "naltatis",
+    expiresSoon: true,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+  },
 };

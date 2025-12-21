@@ -1,12 +1,17 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"slices"
 	"strings"
 
+	"github.com/evcc-io/evcc/plugin/auth"
+	"github.com/evcc-io/evcc/util"
 	"github.com/evcc-io/evcc/util/templates"
 	"github.com/gorilla/mux"
+	"github.com/samber/lo"
 )
 
 var supportedLanguages = []string{"en", "de"}
@@ -17,6 +22,38 @@ func getLang(r *http.Request) string {
 		lang = supportedLanguages[0]
 	}
 	return lang
+}
+
+// authHandler returns the authorization status
+func authHandler(w http.ResponseWriter, r *http.Request) {
+	var res map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
+		jsonError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var cc struct {
+		Type  string
+		Other map[string]any `mapstructure:",remain"`
+	}
+
+	if err := util.DecodeOther(res, &cc); err != nil {
+		jsonError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	ts, err := auth.NewFromConfig(context.Background(), cc.Type, cc.Other)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if _, err := ts.Token(); err != nil {
+		jsonError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // templatesHandler returns the list of templates by class
@@ -34,8 +71,8 @@ func templatesHandler(w http.ResponseWriter, r *http.Request) {
 
 	// filter deprecated properties
 	filterParams := func(t templates.Template) templates.Template {
-		t.Params = slices.DeleteFunc(t.Params, func(p templates.Param) bool {
-			return p.IsDeprecated()
+		t.Params = lo.Filter(t.Params, func(p templates.Param, _ int) bool {
+			return !p.IsDeprecated()
 		})
 		return t
 	}

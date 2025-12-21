@@ -45,12 +45,16 @@
 					spellcheck="false"
 					@paste="(event) => handlePaste(event, values)"
 				/>
-				<small
-					>{{ $t("config.sponsor.descriptionToken", { url: "sponsor.evcc.io" }) }}
-					<a :href="trialTokenLink" target="_blank">
-						{{ $t("config.sponsor.trialToken") }}.</a
-					>
-				</small>
+				<i18n-t tag="small" keypath="config.sponsor.descriptionToken" scope="global">
+					<template #url>
+						<a href="https://sponsor.evcc.io" target="_blank">sponsor.evcc.io</a>
+					</template>
+					<template #trialToken>
+						<a :href="trialTokenLink" target="_blank">{{
+							$t("config.sponsor.trialToken")
+						}}</a>
+					</template>
+				</i18n-t>
 			</div>
 			<div v-else-if="token">
 				<label for="existingToken" class="fw-bold my-2">{{
@@ -106,13 +110,13 @@ export default {
 			return store?.state?.sponsor;
 		},
 		token() {
-			return this.sponsor?.token;
+			return this.sponsor?.status.token;
 		},
 		fromYaml() {
 			return this.sponsor?.fromYaml;
 		},
 		name() {
-			return this.sponsor?.name || "";
+			return this.sponsor?.status.name || "";
 		},
 		showTokenForm() {
 			return this.editMode || !this.token;

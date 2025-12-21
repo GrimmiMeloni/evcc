@@ -67,7 +67,7 @@ export default defineComponent({
 		},
 		timestamp: {
 			type: String,
-			required: true,
+			default: "",
 		},
 		currency: {
 			type: String as PropType<CURRENCY>,
@@ -75,28 +75,44 @@ export default defineComponent({
 		},
 		batteryColors: {
 			type: Array as PropType<string[]>,
-			required: true,
+			default: () => [],
 		},
 	},
 	computed: {
 		timeLabels(): string[] {
 			const startTime = new Date(this.timestamp);
 			return this.evopt.req.time_series.dt.map((_, index) => {
-				const currentTime = new Date(startTime.getTime() + index * 60 * 60 * 1000); // Add hours
-				return currentTime.getHours().toString();
+				// Calculate cumulative time from dt array
+				let cumulativeSeconds = 0;
+				for (let i = 0; i < index; i++) {
+					cumulativeSeconds += this.evopt.req.time_series.dt[i] || 0;
+				}
+
+				const currentTime = new Date(startTime.getTime() + cumulativeSeconds * 1000);
+				const hour = currentTime.getHours();
+				const minute = currentTime.getMinutes();
+
+				// Only show labels at exact hour boundaries divisible by 4
+				if (minute === 0 && hour % 4 === 0) {
+					return hour.toString();
+				}
+				return "";
 			});
 		},
 		chartData(): ChartData {
 			const datasets: any[] = [];
 
-			// 1. Solar Forecast (first, with increased tension)
-			datasets.push(...this.getSolarDatasets());
+			// 1. Grid power data (import/export)
+			datasets.push(...this.getGridPowerDatasets());
 
-			// 2. Battery power data
-			datasets.push(...this.getBatteryPowerDatasets());
+			// 2. Solar Forecast
+			datasets.push(...this.getSolarDatasets());
 
 			// 3. Household Demand (power)
 			datasets.push(...this.getHouseholdDatasets());
+
+			// 4. Battery power data
+			datasets.push(...this.getBatteryPowerDatasets());
 
 			return {
 				labels: this.timeLabels,
@@ -110,6 +126,10 @@ export default defineComponent({
 				color: colors.text || "",
 				animation: false,
 				interaction: {
+					mode: "index",
+					intersect: false,
+				},
+				hover: {
 					mode: "index",
 					intersect: false,
 				},
@@ -130,9 +150,23 @@ export default defineComponent({
 						mode: "index",
 						intersect: false,
 						callbacks: {
+							title: (context) => {
+								const index = context[0]?.dataIndex;
+								return this.formatTimeRange(index ?? 0);
+							},
 							label: (context) => {
 								const label = context.dataset.label || "";
-								const value = context.parsed.y;
+								const value = context.parsed.y ?? 0;
+								// Special handling for Grid Power
+								if (label === "Grid Power") {
+									if (value > 0) {
+										return `Grid Import: ${this.formatValue(Math.abs(value))} kW`;
+									} else if (value < 0) {
+										return `Grid Export: ${this.formatValue(Math.abs(value))} kW`;
+									} else {
+										return `Grid: 0 kW`;
+									}
+								}
 								// Power axis (kW)
 								return `${label}: ${this.formatValue(value)} kW`;
 							},
@@ -149,7 +183,43 @@ export default defineComponent({
 						},
 						stacked: true,
 						grid: {
-							display: false,
+							display: true,
+							drawOnChartArea: true,
+							drawTicks: true,
+							color: "transparent",
+							tickLength: 4,
+						},
+						ticks: {
+							autoSkip: false,
+							maxRotation: 0,
+							minRotation: 0,
+							callback: (_value, index) => {
+								const startTime = new Date(this.timestamp);
+
+								// Calculate cumulative time from dt array
+								let cumulativeSeconds = 0;
+								for (let i = 0; i < index; i++) {
+									cumulativeSeconds += this.evopt.req.time_series.dt[i] || 0;
+								}
+
+								const currentTime = new Date(
+									startTime.getTime() + cumulativeSeconds * 1000
+								);
+								const hour = currentTime.getHours();
+								const minute = currentTime.getMinutes();
+
+								// Show ticks at exact hour boundaries
+								if (minute === 0) {
+									// Show labels only at hours divisible by 4
+									if (hour % 4 === 0) {
+										return hour.toString();
+									}
+									// Show tick but no label for other hours
+									return "";
+								}
+								// Return undefined to skip this tick entirely
+								return undefined;
+							},
 						},
 					},
 					y: {
@@ -162,20 +232,8 @@ export default defineComponent({
 						stacked: true,
 						grid: {
 							drawOnChartArea: true,
-							color: (context: any) => {
-								// Make zero axis black to highlight
-								if (context.tick?.value === 0) {
-									return "#000000";
-								}
-								return colors.border || "#e0e0e0";
-							},
-							lineWidth: (context: any) => {
-								// Make zero axis slightly thicker
-								if (context.tick?.value === 0) {
-									return 2;
-								}
-								return 1;
-							},
+							color: colors.border || "",
+							lineWidth: 1,
 						},
 						// Keep scales purely based on values, no fixed boundaries
 					},
@@ -203,11 +261,11 @@ export default defineComponent({
 			return [
 				{
 					label: "Solar Forecast",
-					data: this.evopt.req.time_series.ft.map(this.convertWToKW),
+					data: this.evopt.req.time_series.ft.map(this.convertWhToKW),
 					borderColor: colors.self,
 					backgroundColor: colors.self,
 					fill: false,
-					tension: 0.25,
+					tension: 0.2,
 					borderJoinStyle: "round",
 					borderCapStyle: "round",
 					pointRadius: 0,
@@ -215,6 +273,7 @@ export default defineComponent({
 					borderWidth: 3,
 					yAxisID: "y",
 					type: "line" as const,
+					stack: "solar",
 				},
 			];
 		},
@@ -230,8 +289,8 @@ export default defineComponent({
 					// Charging = positive, Discharging = negative
 					const combinedPower = battery.charging_power.map((chargingPower, timeIndex) => {
 						const dischargingPower = battery.discharging_power[timeIndex] || 0;
-						const chargingKW = this.convertWToKW(chargingPower);
-						const dischargingKW = this.convertWToKW(dischargingPower);
+						const chargingKW = this.convertWhToKW(chargingPower, timeIndex);
+						const dischargingKW = this.convertWhToKW(dischargingPower, timeIndex);
 
 						// Return charging as positive, discharging as negative
 						// One should be zero, the other should have the value
@@ -245,7 +304,7 @@ export default defineComponent({
 						borderWidth: 0,
 						yAxisID: "y",
 						type: "bar" as const,
-						stack: "power",
+						stack: "charge",
 					});
 				});
 			}
@@ -253,8 +312,7 @@ export default defineComponent({
 			return datasets;
 		},
 		getHouseholdDatasets() {
-			// Household Demand (as power, not energy like in SocChart)
-			const householdPower = this.evopt.req.time_series.gt.map(this.convertWToKW);
+			const householdPower = this.evopt.req.time_series.gt.map(this.convertWhToKW);
 
 			// Use the next color in the palette after all battery colors
 			const batteryCount = this.batteryColors.length;
@@ -262,19 +320,58 @@ export default defineComponent({
 
 			return [
 				{
-					label: "Household Demand",
+					label: "Household",
 					data: householdPower,
 					backgroundColor: householdColor,
 					borderWidth: 0,
 					yAxisID: "y",
 					type: "bar" as const,
-					stack: "power",
+					stack: "charge",
 				},
 			];
 		},
 
-		convertWToKW: (watts: number): number => {
-			return watts / 1000;
+		getGridPowerDatasets() {
+			const datasets: any[] = [];
+
+			// Get grid import and export data
+			const gridImport = this.evopt.res.grid_import || [];
+			const gridExport = this.evopt.res.grid_export || [];
+
+			// Combine grid import and export into a single line
+			// Grid import is positive, grid export is negative (one is always zero)
+			const gridPower = gridImport.map((importValue, index) => {
+				const exportValue = gridExport[index] || 0;
+				const importKW = this.convertWhToKW(importValue, index);
+				const exportKW = this.convertWhToKW(exportValue, index);
+				// Return import as positive, export as negative
+				return importKW > 0 ? importKW : -exportKW;
+			});
+
+			datasets.push({
+				label: "Grid Power",
+				data: gridPower,
+				borderColor: "#666666", // Dark gray
+				backgroundColor: "#666666", // Dark gray
+				fill: false,
+				tension: 0.2,
+				borderWidth: 2, // Same thickness as price chart lines
+				pointRadius: 0,
+				pointHoverRadius: 6,
+				yAxisID: "y",
+				type: "line" as const,
+				stack: "grid",
+			});
+
+			return datasets;
+		},
+
+		convertWhToKW(wh: number, index: number): number {
+			// Convert Wh to kW by normalizing against time duration
+			// Power (kW) = Energy (Wh) / Time (h) / 1000
+			const dtSeconds = this.evopt.req.time_series.dt[index] || 0;
+			const hours = dtSeconds / 3600; // Convert seconds to hours
+			return wh / hours / 1000;
 		},
 
 		formatValue: (value: number): string => {
@@ -284,6 +381,28 @@ export default defineComponent({
 		getBatteryTitle(index: number): string {
 			const detail = this.batteryDetails[index];
 			return detail ? detail.title || detail.name : `Battery ${index + 1}`;
+		},
+
+		formatTimeRange(index: number): string {
+			const startTime = new Date(this.timestamp);
+
+			// Calculate cumulative time from dt array
+			let cumulativeSeconds = 0;
+			for (let i = 0; i < index; i++) {
+				cumulativeSeconds += this.evopt.req.time_series.dt[i] || 0;
+			}
+
+			const slotStart = new Date(startTime.getTime() + cumulativeSeconds * 1000);
+			const slotDuration = this.evopt.req.time_series.dt[index] || 0;
+			const slotEnd = new Date(slotStart.getTime() + slotDuration * 1000);
+
+			const formatTime = (date: Date): string => {
+				const hours = date.getHours().toString().padStart(2, "0");
+				const minutes = date.getMinutes().toString().padStart(2, "0");
+				return `${hours}:${minutes}`;
+			};
+
+			return `${formatTime(slotStart)} - ${formatTime(slotEnd)}`;
 		},
 	},
 });

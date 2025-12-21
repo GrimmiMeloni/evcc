@@ -18,7 +18,9 @@
 				<tbody>
 					<!-- Request Data -->
 					<tr class="table-secondary">
-						<td colspan="100%" class="fw-bold text-start">Request Data</td>
+						<td :colspan="timeSlots.length + 1" class="fw-bold text-start">
+							Request Data
+						</td>
 					</tr>
 					<tr>
 						<td class="fw-medium text-nowrap text-start">Solar Forecast (kW)</td>
@@ -27,20 +29,27 @@
 							:key="index"
 							:class="['text-end', { 'text-muted': value === 0 }]"
 						>
-							{{ formatPower(value) }}
+							{{ formatEnergyToPower(value, index) }}
 						</td>
 					</tr>
-
 					<tr>
-						<td class="fw-medium text-nowrap text-start">
-							{{ gridFeedinPriceLabel }}
-						</td>
+						<td class="fw-medium text-nowrap text-start">Household Demand (kW)</td>
 						<td
-							v-for="(value, index) in evopt.req.time_series.p_E"
+							v-for="(value, index) in evopt.req.time_series.gt"
 							:key="index"
 							:class="['text-end', { 'text-muted': value === 0 }]"
 						>
-							{{ fmtPricePerKWh(value * 1000, currency, false, false) }}
+							{{ formatEnergyToPower(value, index) }}
+						</td>
+					</tr>
+					<tr>
+						<td class="fw-medium text-nowrap text-start">Time Step Duration (h)</td>
+						<td
+							v-for="(value, index) in evopt.req.time_series.dt"
+							:key="index"
+							:class="['text-end']"
+						>
+							{{ formatDuration(value) }}
 						</td>
 					</tr>
 					<tr>
@@ -56,29 +65,23 @@
 						</td>
 					</tr>
 					<tr>
-						<td class="fw-medium text-nowrap text-start">Household Demand (kW)</td>
+						<td class="fw-medium text-nowrap text-start">
+							{{ gridFeedinPriceLabel }}
+						</td>
 						<td
-							v-for="(value, index) in evopt.req.time_series.gt"
+							v-for="(value, index) in evopt.req.time_series.p_E"
 							:key="index"
 							:class="['text-end', { 'text-muted': value === 0 }]"
 						>
-							{{ formatPower(value) }}
-						</td>
-					</tr>
-					<tr>
-						<td class="fw-medium text-nowrap text-start">Time Step Duration (h)</td>
-						<td
-							v-for="(value, index) in evopt.req.time_series.dt"
-							:key="index"
-							:class="['text-end']"
-						>
-							{{ formatDuration(value) }}
+							{{ fmtPricePerKWh(value * 1000, currency, false, false) }}
 						</td>
 					</tr>
 
 					<!-- Response Data -->
 					<tr class="table-secondary">
-						<td colspan="100%" class="fw-bold text-start">Response Data</td>
+						<td :colspan="timeSlots.length + 1" class="fw-bold text-start">
+							Response Data
+						</td>
 					</tr>
 					<tr>
 						<td class="fw-medium text-nowrap text-start">Grid Export (kW)</td>
@@ -87,7 +90,7 @@
 							:key="index"
 							:class="['text-end', { 'text-muted': value === 0 }]"
 						>
-							{{ formatPower(value) }}
+							{{ formatEnergyToPower(value, index) }}
 						</td>
 					</tr>
 					<tr>
@@ -97,7 +100,7 @@
 							:key="index"
 							:class="['text-end', { 'text-muted': value === 0 }]"
 						>
-							{{ formatPower(value) }}
+							{{ formatEnergyToPower(value, index) }}
 						</td>
 					</tr>
 					<tr>
@@ -119,13 +122,13 @@
 						:key="batteryIndex"
 					>
 						<tr>
-							<td colspan="100%" class="fw-bold text-start">
+							<td :colspan="timeSlots.length + 1" class="fw-bold text-start">
 								<div class="d-flex align-items-center">
 									<span
 										class="battery-indicator me-2"
 										:style="{ backgroundColor: batteryColors[batteryIndex] }"
 									></span>
-									{{ getBatteryTitle(batteryIndex) }} Response
+									{{ getBatteryTitle(batteryIndex) }}
 								</div>
 							</td>
 						</tr>
@@ -136,7 +139,7 @@
 								:key="index"
 								:class="['text-end', { 'text-muted': value === 0 }]"
 							>
-								{{ formatPower(value) }}
+								{{ formatEnergyToPower(value, index) }}
 							</td>
 						</tr>
 						<tr>
@@ -146,7 +149,7 @@
 								:key="index"
 								:class="['text-end', { 'text-muted': value === 0 }]"
 							>
-								{{ formatPower(value) }}
+								{{ formatEnergyToPower(value, index) }}
 							</td>
 						</tr>
 						<tr>
@@ -217,7 +220,7 @@ export default defineComponent({
 		},
 		timestamp: {
 			type: String,
-			required: true,
+			default: "",
 		},
 		currency: {
 			type: String as PropType<CURRENCY>,
@@ -225,11 +228,11 @@ export default defineComponent({
 		},
 		batteryColors: {
 			type: Array as PropType<string[]>,
-			required: true,
+			default: () => [],
 		},
 		dimmedBatteryColors: {
 			type: Array as PropType<string[]>,
-			required: true,
+			default: () => [],
 		},
 	},
 	computed: {
@@ -245,18 +248,26 @@ export default defineComponent({
 		},
 	},
 	methods: {
-		formatPower(watts: number): string {
+		formatEnergyToPower(wh: number, index: number): string {
+			// Convert Wh to kW by normalizing against time duration
+			const dtSeconds = this.evopt.req.time_series.dt[index] || 0;
+			const hours = dtSeconds / 3600; // Convert seconds to hours
+			const watts = wh / hours; // Convert to W (power)
 			return this.fmtW(watts, this.POWER_UNIT.KW, false, 1);
 		},
 		formatEnergy(wh: number): string {
 			return this.fmtWh(wh, this.POWER_UNIT.KW, false, 1);
 		},
 		formatDuration: (seconds: number): string => {
-			return (seconds / 3600).toFixed(1);
+			return (seconds / 3600).toFixed(2);
 		},
 		formatHour(index: number): string {
+			// Show label only every 4th slot (every hour for 15-minute slots)
+			if (index % 4 !== 0) {
+				return "";
+			}
 			const startTime = new Date(this.timestamp);
-			const currentTime = new Date(startTime.getTime() + index * 60 * 60 * 1000); // Add hours
+			const currentTime = new Date(startTime.getTime() + index * 15 * 60 * 1000); // Add 15-minute intervals
 			return currentTime.getHours().toString();
 		},
 		getBatteryTitle(index: number): string {

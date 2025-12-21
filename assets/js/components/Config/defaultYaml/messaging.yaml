@@ -17,6 +17,9 @@
 #  guest:
 #    title: Unknown vehicle
 #    msg: Unknown vehicle, guest connected?
+#  asleep:
+#    title: Vehicle asleep
+#    msg: Charge release, vehicle {{ if .vehicleTitle }}{{ .vehicleTitle }} {{ end }}not charging.
 
 #services:
 #- type: pushover
@@ -31,5 +34,6 @@
 #  uri: smtp://<user>:<password>@<host>:<port>/?fromAddress=<from>&toAddresses=<to>
 #- type: ntfy
 #  uri: https://<host>/<topics>
+#  authtoken: <auth_token>
 #  priority: <priority>
 #  tags: <tags>

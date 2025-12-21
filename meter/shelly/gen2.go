@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/evcc-io/evcc/util"
@@ -326,26 +325,14 @@ func (c *gen2) getAddOnSwitchId(channel int) (int, error) {
 		return channel, err
 	}
 
-	return parseAddOnSwitchID(channel, res)
+	return parseAddOnSwitchID(channel, res), nil
 }
 
-func parseAddOnSwitchID(channel int, res Gen2ProAddOnGetPeripherals) (int, error) {
-	var ids []int
-
-	for key := range res.DigitalOut {
-		if strings.HasPrefix(key, "switch:") {
-			var id int
-			if _, err := fmt.Sscanf(key, "switch:%d", &id); err != nil {
-				return 0, fmt.Errorf("failed to get add-on switch id: %w", err)
-			}
-			ids = append(ids, id)
-		}
+func parseAddOnSwitchID(channel int, res Gen2ProAddOnGetPeripherals) int {
+	if _, ok := res.DigitalOut["switch:100"]; ok {
+		return 100
 	}
 
-	if len(ids) == 0 {
-		return channel, nil
-	}
-
-	// Return the minimum ID using slices.Min for deterministic behavior
-	return slices.Min(ids), nil
+	// if no switch ID is found, return the channel as default
+	return channel
 }

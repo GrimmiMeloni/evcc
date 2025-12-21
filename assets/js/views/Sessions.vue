@@ -1,6 +1,6 @@
 <template>
 	<div class="container px-4 safe-area-inset">
-		<TopHeader :title="$t('sessions.title')" />
+		<TopHeader :title="$t('sessions.title')" :notifications="notifications" />
 		<div class="row">
 			<main class="col-12">
 				<div class="header-outer sticky-top">
@@ -207,7 +207,7 @@ import DynamicPriceIcon from "../components/MaterialIcon/DynamicPrice.vue";
 import TotalIcon from "../components/MaterialIcon/Total.vue";
 import { TYPES, GROUPS, PERIODS, type Session } from "../components/Sessions/types";
 import { defineComponent, type PropType } from "vue";
-import { CURRENCY } from "@/types/evcc";
+import { CURRENCY, type Notification } from "@/types/evcc";
 
 export default defineComponent({
 	name: "Sessions",
@@ -519,8 +519,8 @@ export default defineComponent({
 				// Assign colors by used energy in the last three months
 				const sortedEntries = Object.entries(energyAggregation).sort((a, b) => b[1] - a[1]);
 				sortedEntries.forEach(([key]) => {
-					if (!result[key]) {
-						result[key] = colors.palette[colorIndex % colors.palette.length];
+					if (key && !result[key]) {
+						result[key] = colors.palette[colorIndex % colors.palette.length] || "";
 						colorIndex++;
 					}
 				});
@@ -528,8 +528,8 @@ export default defineComponent({
 				// Assign colors to remaining entries
 				this.sessionsWithDefaults.forEach((session) => {
 					const key = session[colorType];
-					if (!result[key]) {
-						result[key] = colors.palette[colorIndex % colors.palette.length];
+					if (key && !result[key]) {
+						result[key] = colors.palette[colorIndex % colors.palette.length] || "";
 						colorIndex++;
 					}
 				});
@@ -727,7 +727,7 @@ export default defineComponent({
 			if (arr.length === 0) return null;
 			const sorted = arr.sort((a, b) => a - b);
 			const index = (p / 100) * (sorted.length - 1);
-			return sorted[Math.floor(index)];
+			return sorted[Math.floor(index)] ?? null;
 		},
 	},
 });
@@ -748,31 +748,31 @@ export default defineComponent({
 
 @media (min-width: 576px) {
 	.header-outer {
-		--vertical-shift: calc((100vw - 540px) / 2);
+		--vertical-shift: calc((100vw - 560px) / 2);
 	}
 }
 
 @media (min-width: 768px) {
 	.header-outer {
-		--vertical-shift: calc((100vw - 720px) / 2);
+		--vertical-shift: calc((100vw - 740px) / 2);
 	}
 }
 
 @media (min-width: 992px) {
 	.header-outer {
-		--vertical-shift: calc((100vw - 960px) / 2);
+		--vertical-shift: calc((100vw - 980px) / 2);
 	}
 }
 
 @media (min-width: 1200px) {
 	.header-outer {
-		--vertical-shift: calc((100vw - 1140px) / 2);
+		--vertical-shift: calc((100vw - 1160px) / 2);
 	}
 }
 
 @media (min-width: 1400px) {
 	.header-outer {
-		--vertical-shift: calc((100vw - 1320px) / 2);
+		--vertical-shift: calc((100vw - 1340px) / 2);
 	}
 }
 </style>
