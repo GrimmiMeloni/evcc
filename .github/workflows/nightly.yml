@@ -33,8 +33,8 @@ jobs:
     name: Call Build
     needs: check_date
     if: |
-      ${{ needs.check_date.outputs.should_run != 'false' }}
-      && startsWith(github.ref, 'refs/heads/master')
+      needs.check_date.outputs.should_run != 'false'
+      && (startsWith(github.ref, 'refs/heads/master') || github.ref == 'refs/heads/nightly')
       && ! contains(github.head_ref, 'refs/heads/chore/')
     uses: grimmimeloni/evcc/.github/workflows/default.yml@nightly
     permissions:
