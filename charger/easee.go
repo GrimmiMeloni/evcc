@@ -61,12 +61,13 @@ type Easee struct {
 	phaseMode             int
 	currentPower, sessionEnergy, totalEnergy,
 	currentL1, currentL2, currentL3 float64
-	rfid      string
-	lp        loadpoint.API
-	cmdC      chan easee.SignalRCommandResponse
-	obsC      chan easee.Observation
-	obsTime   map[easee.ObservationID]time.Time
-	startDone func()
+	rfid         string
+	lp           loadpoint.API
+	cmdMu        sync.Mutex
+	pendingTicks map[int64]chan easee.SignalRCommandResponse
+	obsC         chan easee.Observation
+	obsTime      map[easee.ObservationID]time.Time
+	startDone    func()
 }
 
 func init() {
@@ -107,15 +108,15 @@ func NewEasee(ctx context.Context, user, password, charger string, timeout time.
 	done := make(chan struct{})
 
 	c := &Easee{
-		Helper:    request.NewHelper(log),
-		charger:   charger,
-		authorize: authorize,
-		log:       log,
-		current:   6, // default current
-		startDone: sync.OnceFunc(func() { close(done) }),
-		cmdC:      make(chan easee.SignalRCommandResponse),
-		obsC:      make(chan easee.Observation),
-		obsTime:   make(map[easee.ObservationID]time.Time),
+		Helper:       request.NewHelper(log),
+		charger:      charger,
+		authorize:    authorize,
+		log:          log,
+		current:      6, // default current
+		startDone:    sync.OnceFunc(func() { close(done) }),
+		pendingTicks: make(map[int64]chan easee.SignalRCommandResponse),
+		obsC:         make(chan easee.Observation),
+		obsTime:      make(map[easee.ObservationID]time.Time),
 	}
 
 	c.Client.Timeout = timeout
@@ -209,6 +210,18 @@ func (c *Easee) waitForOptionalState() {
 		time.Sleep(100 * time.Millisecond)
 	}
 	c.log.WARN.Println("did not receive full state from cloud")
+}
+
+func (c *Easee) registerPendingTick(tick int64, ch chan easee.SignalRCommandResponse) {
+	c.cmdMu.Lock()
+	c.pendingTicks[tick] = ch
+	c.cmdMu.Unlock()
+}
+
+func (c *Easee) unregisterPendingTick(tick int64) {
+	c.cmdMu.Lock()
+	delete(c.pendingTicks, tick)
+	c.cmdMu.Unlock()
 }
 
 // check c.obsTime for presence of ALL of the following keys: easee.SESSION_ENERGY, easee.LIFETIME_ENERGY
@@ -385,10 +398,17 @@ func (c *Easee) CommandResponse(i json.RawMessage) {
 	}
 	c.log.TRACE.Printf("CommandResponse %s: %+v", res.SerialNumber, res)
 
-	select {
-	case c.cmdC <- res:
-	default:
+	c.cmdMu.Lock()
+	ch, ok := c.pendingTicks[res.Ticks]
+	c.cmdMu.Unlock()
+
+	if !ok {
+		c.log.WARN.Printf("rogue CommandResponse: charger %s sent Ticks=%d (accepted=%v, resultCode=%d) "+
+			"which was not triggered by evcc — another system may be controlling this charger",
+			res.SerialNumber, res.Ticks, res.WasAccepted, res.ResultCode)
+		return
 	}
+	ch <- res
 }
 
 func (c *Easee) chargers() ([]easee.Charger, error) {
@@ -545,26 +565,25 @@ func (c *Easee) postJSONAndWait(uri string, data any) (bool, error) {
 			return true, nil
 		}
 
-		return false, c.waitForTickResponse(cmd.Ticks)
+		ch := make(chan easee.SignalRCommandResponse, 1)
+		c.registerPendingTick(cmd.Ticks, ch)
+		defer c.unregisterPendingTick(cmd.Ticks)
+		return false, c.waitForTickResponse(cmd.Ticks, ch)
 	}
 
 	// all other response codes lead to an error
 	return false, fmt.Errorf("invalid status: %d", resp.StatusCode)
 }
 
-func (c *Easee) waitForTickResponse(expectedTick int64) error {
-	for {
-		select {
-		case cmdResp := <-c.cmdC:
-			if cmdResp.Ticks == expectedTick {
-				if !cmdResp.WasAccepted {
-					return fmt.Errorf("command rejected: %d", cmdResp.Ticks)
-				}
-				return nil
-			}
-		case <-time.After(c.Client.Timeout):
-			return api.ErrTimeout
+func (c *Easee) waitForTickResponse(expectedTick int64, ch <-chan easee.SignalRCommandResponse) error {
+	select {
+	case cmdResp := <-ch:
+		if !cmdResp.WasAccepted {
+			return fmt.Errorf("command rejected: %d", cmdResp.Ticks)
 		}
+		return nil
+	case <-time.After(c.Client.Timeout):
+		return api.ErrTimeout
 	}
 }
 
