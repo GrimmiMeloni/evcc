@@ -36,7 +36,8 @@ ownership boundary.
 2. Make `easee.go` call sites trivially readable — one method call per command.
 3. Enable isolated unit testing of the correlation logic without a full `Easee`
    struct.
-4. Preserve full functional equivalence with the current implementation.
+4. Preserve functional equivalence with the current implementation, with one
+   intentional bug fix in `MaxCurrent` (see Intentional Behaviour Changes).
 
 ## Non-Goals
 
@@ -124,14 +125,10 @@ func NewCommandDispatcher(
 // if the response is asynchronous (HTTP 202), waits for the matching SignalR
 // CommandResponse.
 //
-// Returns (noop bool, error):
-//   - noop=true if the API indicated no change was needed (Ticks == 0)
-//   - noop=false on a successful synchronous (200) or confirmed async (202) call
-//   - error on HTTP failure, decode failure, command rejection, or timeout
-//
-// Precondition: must not be called with a Ticks value of 0 (noop is detected
-// internally and returned before any channel is registered).
-func (d *CommandDispatcher) Send(uri string, data any) (noop bool, err error)
+// Returns nil on success (both synchronous HTTP 200 and confirmed async HTTP 202,
+// including noops where Ticks == 0). Returns an error on HTTP failure, decode
+// failure, command rejection, or timeout.
+func (d *CommandDispatcher) Send(uri string, data any) error
 
 // Dispatch routes an incoming CommandResponse to the appropriate waiter.
 // Must be called from the Easee.CommandResponse SignalR handler.
@@ -156,19 +153,19 @@ func (d *CommandDispatcher) CancelOrphan(id ObservationID) bool
 ### `Send`
 
 1. POST to `uri` with `data` using the authenticated helper.
-2. HTTP 200 → return `(false, nil)` immediately (synchronous, no wait).
+2. HTTP 200 → return `nil` immediately (synchronous, no wait).
 3. HTTP other → return error immediately.
 4. HTTP 202 → parse body:
    - URI contains `/commands/` → decode single `RestCommandResponse`
    - otherwise → decode `[]RestCommandResponse`, take index 0 if present
-5. `cmd.Ticks == 0` → return `(true, nil)` (noop, no wait).
+5. `cmd.Ticks == 0` → return `nil` (noop, no wait).
 6. Create `ch := make(chan SignalRCommandResponse, 1)`.
 7. Under `mu`: register `pendingTicks[cmd.Ticks] = ch` and
    `pendingByID[ObservationID(cmd.CommandId)] = ch`.
 8. Defer cleanup: under `mu`, delete both entries on return.
 9. `select { case res := <-ch: ... | case <-time.After(d.timeout): return api.ErrTimeout }`.
 10. If `res.WasAccepted == false` → return `fmt.Errorf("command rejected: %d", res.Ticks)`.
-11. Return `(false, nil)`.
+11. Return `nil`.
 
 The buffered channel (capacity 1) ensures `Dispatch` never blocks even if
 `Send` has already returned due to timeout.
@@ -245,7 +242,22 @@ dispatcher: easee.NewCommandDispatcher(c.Helper, log, timeout),
 
 ### Call site changes
 
-**`Enable`, `MaxCurrent`, `updateSmartCharging`** — every `c.postJSONAndWait(uri, data)` becomes `c.dispatcher.Send(uri, data)`.
+**`Enable`, `updateSmartCharging`** — every `c.postJSONAndWait(uri, data)` becomes `c.dispatcher.Send(uri, data)`.
+
+**`MaxCurrent`** — `c.postJSONAndWait(uri, data)` becomes `c.dispatcher.Send(uri, data)`, and the subsequent `waitForDynamicChargerCurrent` call is corrected to pass the capped value (see Intentional Behaviour Changes):
+
+```go
+// Before:
+_, noop, err := c.postJSONAndWait(uri, data)
+if err == nil && !noop {
+    err = c.waitForDynamicChargerCurrent(float64(current)) // BUG: uncapped value
+}
+
+// After:
+if err := c.dispatcher.Send(uri, data); err == nil {
+    err = c.waitForDynamicChargerCurrent(cur) // cur = min(float64(current), maxChargerCurrent)
+}
+```
 
 **`CommandResponse` handler** (before: ~25 lines):
 
@@ -265,7 +277,7 @@ func (c *Easee) CommandResponse(i json.RawMessage) {
 
 ```go
 c.dispatcher.ExpectOrphan(easee.CIRCUIT_MAX_CURRENT_P1)
-_, err = c.dispatcher.Send(uri, data)
+err = c.dispatcher.Send(uri, data)
 if err != nil {
     c.dispatcher.CancelOrphan(easee.CIRCUIT_MAX_CURRENT_P1)
 }
@@ -279,7 +291,7 @@ if err != nil {
 |---|---|
 | HTTP error (non-200/202) | Return error immediately; no channel created |
 | Response body decode failure | Return error immediately; no channel created |
-| Noop (`Ticks == 0`) | Return `(true, nil)` immediately; no channel created |
+| Noop (`Ticks == 0`) | Return `nil` immediately; no channel created |
 | `WasAccepted: false` | Return `fmt.Errorf("command rejected: %d", res.Ticks)`; deferred cleanup runs |
 | Timeout | Return `api.ErrTimeout`; deferred cleanup removes both map entries. If `CommandResponse` arrives later (e.g. post-reconnect), `Dispatch` finds no entry and logs a WARN — an accepted false-positive |
 | `ExpectOrphan` + POST error | Call site calls `CancelOrphan`; if orphan already consumed, `CancelOrphan` returns false and is a no-op |
@@ -295,8 +307,8 @@ No `Easee` struct required.
 
 | Test | Verifies |
 |---|---|
-| `Send` — HTTP 200 sync | Returns `(false, nil)` immediately |
-| `Send` — noop (Ticks=0) | Returns `(true, nil)` immediately |
+| `Send` — HTTP 200 sync | Returns `nil` immediately |
+| `Send` — noop (Ticks=0) | Returns `nil` immediately |
 | `Send` — HTTP error | Returns error immediately |
 | `Send` — normal 202, Ticks match | Goroutine calls `Dispatch`; `Send` returns nil |
 | `Send` — 202, ID fallback | `Dispatch` with wrong Ticks, matching ObservationID; `Send` returns nil |
@@ -319,6 +331,30 @@ No `Easee` struct required.
 All other tests (`waitForChargerEnabledState`, `waitForDynamicChargerCurrent`,
 `Enable` flows, `StatusReason`, `MaxCurrent`, `InExpectedOpMode`) remain and
 are unaffected.
+
+---
+
+## Intentional Behaviour Changes
+
+### `MaxCurrent`: capped current passed to `waitForDynamicChargerCurrent`
+
+**Bug:** In the current implementation, `MaxCurrent(current int64)` computes a
+capped value `cur = min(float64(current), c.maxChargerCurrent)` and posts `cur`
+to the API, but then calls `waitForDynamicChargerCurrent(float64(current))` with
+the *uncapped* value. If `current > maxChargerCurrent`, the charger never reaches
+`float64(current)`, so `waitForDynamicChargerCurrent` always times out even
+though the command succeeded.
+
+**Fix:** Pass `cur` (the capped value, which is what was actually sent) to
+`waitForDynamicChargerCurrent`. The wait then short-circuits immediately if the
+charger is already at `cur`, or correctly waits for the charger to reach `cur`.
+
+This fix is a direct consequence of removing the noop boolean: the old code used
+`!noop` to gate the `waitForDynamicChargerCurrent` call, but with `Send` returning
+only `error`, the short-circuit for the noop case is handled inside
+`waitForDynamicChargerCurrent` itself (which returns immediately if
+`c.dynamicChargerCurrent == expected`). For this short-circuit to work correctly
+in the capping scenario, the expected value must be `cur`, not `float64(current)`.
 
 ---
 
