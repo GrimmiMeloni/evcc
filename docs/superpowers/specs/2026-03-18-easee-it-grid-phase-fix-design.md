@@ -176,8 +176,20 @@ entire existing test suite. Tests use `httpmock` for HTTP mocking.
 | 3 | Config fetch fails, sole charger | HTTP 500 | 1 charger (matching ID) | 0 |
 | 4 | TN grid, multi-charger circuit | HTTP 200, `DetectedPowerGridType=1` | 2 chargers | 0 |
 
-Test 3's WARN log is not asserted — the existing test suite never asserts log output, and no log
-assertion infrastructure exists. The WARN is a side-effect only.
+Test 3 must not emit the WARN to stdout. No prior art exists in the codebase for log suppression
+in tests — no test currently uses `io.Discard` or `SetOutput`. The mechanism to use:
+`jww.Notepad` (embedded in `util.Logger`) exposes each level as a `*log.Logger` field, and
+`*log.Logger` has `SetOutput(io.Writer)`. In test 3's setup, before calling `determineCircuit`,
+redirect the WARN output:
+
+```go
+e.log.WARN.SetOutput(io.Discard)
+```
+
+Note: `util.NewLogger("easee")` caches loggers by name, so this modifies the shared instance.
+Since the existing tests run sequentially (no `t.Parallel()` calls) and none assert log output,
+this is safe. Restore with `e.log.WARN.SetOutput(os.Stdout)` after the test if needed, or
+accept the suppression for the test's duration.
 
 Test 4: `chargerConfig` is called before the charger list is inspected, so the mock is required
 even in the multi-charger case. With TN grid confirmed, the loop runs but `len > 1` causes
