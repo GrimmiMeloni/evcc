@@ -9,7 +9,7 @@ on:
 
 jobs:
   check_date:
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     name: Check latest commit
 
     permissions:
@@ -34,9 +34,9 @@ jobs:
     needs: check_date
     if: |
       needs.check_date.outputs.should_run != 'false'
-      && startsWith(github.ref, 'refs/heads/master')
+      && (startsWith(github.ref, 'refs/heads/master') || github.ref == 'refs/heads/nightly')
       && ! contains(github.head_ref, 'refs/heads/chore/')
-    uses: evcc-io/evcc/.github/workflows/default.yml@master
+    uses: grimmimeloni/evcc/.github/workflows/default.yml@nightly
     permissions:
       contents: read
       actions: write
@@ -45,7 +45,7 @@ jobs:
     name: Publish Docker :nightly
     needs:
       - call-build-workflow
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -54,7 +54,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: refs/heads/master # force master
           fetch-depth: 0
           persist-credentials: false
 
@@ -74,38 +73,22 @@ jobs:
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Define tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: evcc/evcc
-          tags: |
-            type=raw,value=nightly
-            type=raw,value=nightly.{{date 'YYYYMMDD'}}-{{sha}}
-
       - name: Publish
         uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v6
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            grimmimeloni/evcc:nightly
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Delete old nightly.* tags
-        run: |
-          old_tags=$(curl -s "https://hub.docker.com/v2/repositories/evcc/evcc/tags/?page_size=100" | jq -r '.results | map(select(.name | startswith("nightly."))) | sort_by(.last_updated) | reverse | .[1:] | .[].name')
-          for tag in $old_tags; do
-            echo "Deleting tag: $tag"
-            curl -s -H "Authorization: Bearer ${{ secrets.DOCKER_PASS }}" -X DELETE "https://hub.docker.com/v2/repositories/evcc/evcc/tags/$tag/"
-          done
 
   hassio:
     name: Hassio Addon :nightly
     needs:
       - docker
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -147,7 +130,7 @@ jobs:
     name: Publish APT nightly
     needs:
       - call-build-workflow
-    runs-on: depot-ubuntu-24.04-arm
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
