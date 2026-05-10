@@ -21,12 +21,10 @@ import (
 )
 
 const (
-	firebaseProjectID      = "678067506455"
-	firebaseAppID          = "1:678067506455:android:4afca86c91d6d4c235bb52"
-	firebaseAPIKey         = "AIzaSyBlJdDfVR6ltRhKpA87F3SmCe2hHqhyEd8"
-	firebaseAndroidPackage = "cz.skodaauto.myskoda"
-	firebaseAndroidCert    = "E567A2E2E6C5E889CDB37EF07EBEC1576C196325"
-	myskodaAppVersion      = "8.11.0"
+	firebaseProjectID = "678067506455"
+	firebaseAppID     = "1:678067506455:android:4afca86c91d6d4c235bb52"
+	firebaseAPIKey    = "AIzaSyBlJdDfVR6ltRhKpA87F3SmCe2hHqhyEd8"
+	myskodaAppVersion = "8.11.0"
 
 	gcmCheckinURL      = "https://android.clients.google.com/checkin"
 	gcmRegisterURL     = "https://android.clients.google.com/c2dm/register3"
@@ -168,8 +166,6 @@ func (c *FCMClient) gcmCheckinWithID(ctx context.Context, androidID, securityTok
 		return 0, 0, err
 	}
 	httpReq.Header.Set("Content-Type", "application/x-protobuf")
-	httpReq.Header.Set("X-Android-Package", firebaseAndroidPackage)
-	httpReq.Header.Set("X-Android-Cert", firebaseAndroidCert)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -211,8 +207,6 @@ func (c *FCMClient) gcmRegister(ctx context.Context, androidID, securityToken ui
 	}
 	httpReq.Header.Set("Authorization", fmt.Sprintf("AidLogin %d:%d", androidID, securityToken))
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("X-Android-Package", firebaseAndroidPackage)
-	httpReq.Header.Set("X-Android-Cert", firebaseAndroidCert)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
