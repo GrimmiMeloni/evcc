@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/evcc-io/evcc/server/db/settings"
 	"github.com/evcc-io/evcc/util"
@@ -196,46 +197,55 @@ func (c *FCMClient) gcmCheckinWithID(ctx context.Context, androidID, securityTok
 
 // gcmRegister registers with GCM to obtain a GCM token.
 func (c *FCMClient) gcmRegister(ctx context.Context, androidID, securityToken uint64) (string, error) {
+	const retries = 5
+
 	subtype := fmt.Sprintf("wp:receiver.push.com#%s", uuid.New().String())
 
-	form := url.Values{
+	formData := url.Values{
 		"app":       {"org.chromium.linux"},
 		"X-subtype": {subtype},
 		"device":    {fmt.Sprintf("%d", androidID)},
 		"sender":    {fcmServerKey},
 	}
+	encoded := formData.Encode()
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, gcmRegisterURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", err
-	}
-	httpReq.Header.Set("Authorization", fmt.Sprintf("AidLogin %d:%d", androidID, securityToken))
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("User-Agent", "")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("gcm register returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	// Response format: "token=<TOKEN>" or may contain other key=value pairs
-	for _, part := range strings.Split(string(body), "\n") {
-		if strings.HasPrefix(part, "token=") {
-			return strings.TrimPrefix(part, "token="), nil
+	var lastErr string
+	for attempt := range retries {
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, gcmRegisterURL, strings.NewReader(encoded))
+		if err != nil {
+			return "", err
 		}
+		httpReq.Header.Set("Authorization", fmt.Sprintf("AidLogin %d:%d", androidID, securityToken))
+		httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		httpReq.Header.Set("User-Agent", "")
+
+		resp, err := c.httpClient.Do(httpReq)
+		if err != nil {
+			return "", err
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return "", err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("gcm register returned status %d: %s", resp.StatusCode, string(body))
+		}
+
+		for _, part := range strings.Split(string(body), "\n") {
+			if strings.HasPrefix(part, "token=") {
+				return strings.TrimPrefix(part, "token="), nil
+			}
+		}
+
+		lastErr = string(body)
+		c.log.WARN.Printf("gcm register attempt %d/%d: %s", attempt+1, retries, lastErr)
+		time.Sleep(time.Second)
 	}
 
-	return "", fmt.Errorf("gcm register: no token in response: %s", string(body))
+	return "", fmt.Errorf("gcm register: no token after %d attempts, last error: %s", retries, lastErr)
 }
 
 // fcmInstall creates a Firebase installation to obtain FID and auth token.
@@ -276,7 +286,8 @@ func (c *FCMClient) fcmInstall(ctx context.Context) (string, string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("fcm install returned status %d", resp.StatusCode)
+		errBody, _ := io.ReadAll(resp.Body)
+		return "", "", fmt.Errorf("fcm install returned status %d: %s", resp.StatusCode, string(errBody))
 	}
 
 	var installResp struct {
@@ -349,7 +360,8 @@ func (c *FCMClient) fcmRegister(ctx context.Context, gcmToken, authToken string)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fcm register returned status %d", resp.StatusCode)
+		errBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("fcm register returned status %d: %s", resp.StatusCode, string(errBody))
 	}
 
 	var regResp struct {
