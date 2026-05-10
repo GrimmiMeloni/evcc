@@ -143,7 +143,7 @@ func (c *FCMClient) testGCMCheckinWithID(ctx context.Context, baseURL string, an
 }
 
 func (c *FCMClient) testGCMRegister(ctx context.Context, baseURL string, androidID, securityToken uint64) (string, error) {
-	subtype := fmt.Sprintf("wp:%s#%s", firebaseAppID, uuid.New().String())
+	subtype := fmt.Sprintf("wp:receiver.push.com#%s", uuid.New().String())
 
 	form := url.Values{
 		"app":       {"org.chromium.linux"},
