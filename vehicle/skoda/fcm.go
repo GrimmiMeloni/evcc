@@ -24,7 +24,6 @@ const (
 	firebaseProjectID      = "678067506455"
 	firebaseAppID          = "1:678067506455:android:4afca86c91d6d4c235bb52"
 	firebaseAPIKey         = "AIzaSyBlJdDfVR6ltRhKpA87F3SmCe2hHqhyEd8"
-	firebaseSenderID       = "678067506455"
 	firebaseAndroidPackage = "cz.skodaauto.myskoda"
 	firebaseAndroidCert    = "E567A2E2E6C5E889CDB37EF07EBEC1576C196325"
 	myskodaAppVersion      = "8.11.0"
@@ -106,7 +105,7 @@ func (c *FCMClient) GetOrRegisterToken(ctx context.Context) (string, error) {
 	c.log.DEBUG.Printf("fcm install ok, fid=%s", fid)
 
 	// Step 4: FCM Register
-	fcmToken, err := c.fcmRegister(ctx, gcmToken, fid, authToken)
+	fcmToken, err := c.fcmRegister(ctx, gcmToken, authToken)
 	if err != nil {
 		return "", fmt.Errorf("fcm register: %w", err)
 	}
@@ -296,7 +295,7 @@ func (c *FCMClient) fcmInstall(ctx context.Context) (string, string, error) {
 }
 
 // fcmRegister registers with FCM to obtain the final FCM token.
-func (c *FCMClient) fcmRegister(ctx context.Context, gcmToken, fid, authToken string) (string, error) {
+func (c *FCMClient) fcmRegister(ctx context.Context, gcmToken, authToken string) (string, error) {
 	// Generate ECDH P-256 key pair (required by API but not used afterward)
 	curve := ecdh.P256()
 	privKey, err := curve.GenerateKey(rand.Reader)

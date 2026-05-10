@@ -1,6 +1,8 @@
 package vehicle
 
 import (
+	"context"
+	"net/http"
 	"time"
 
 	"github.com/evcc-io/evcc/api"
@@ -29,6 +31,7 @@ func NewSkodaFromConfig(other map[string]any) (api.Vehicle, error) {
 		User, Password, VIN string
 		Cache               time.Duration
 		Timeout             time.Duration
+		Streaming           bool
 	}{
 		Cache:   interval,
 		Timeout: request.Timeout,
@@ -78,7 +81,36 @@ func NewSkodaFromConfig(other map[string]any) (api.Vehicle, error) {
 		api := skoda.NewAPI(log, ts)
 		api.Client.Timeout = cc.Timeout
 
-		v.Provider = skoda.NewProvider(api, vehicle.VIN, cc.Cache)
+		if cc.Streaming {
+			// 1. Create FCM client and get token
+			fcmClient := skoda.NewFCMClient(log, &http.Client{}, cc.User)
+			fcmToken, fcmErr := fcmClient.GetOrRegisterToken(context.Background())
+			if fcmErr != nil {
+				return nil, fcmErr
+			}
+
+			// 2. Register with MySkoda (idempotent)
+			if regErr := api.RegisterFCMToken(fcmToken); regErr != nil {
+				log.WARN.Printf("fcm myskoda registration: %v", regErr)
+			}
+
+			// 3. Extract userID from access token
+			token, tokenErr := ts.Token()
+			if tokenErr != nil {
+				return nil, tokenErr
+			}
+
+			userID, idErr := skoda.UserIDFromToken(token)
+			if idErr != nil {
+				return nil, idErr
+			}
+
+			// 4. Create MQTT connector and streaming provider
+			connector := skoda.NewMqttConnector(log, userID, fcmToken, ts)
+			v.Provider = skoda.NewStreamingProvider(log, api, vehicle.VIN, cc.Cache, connector)
+		} else {
+			v.Provider = skoda.NewProvider(api, vehicle.VIN, cc.Cache)
+		}
 	}
 
 	return v, err

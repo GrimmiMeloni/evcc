@@ -5,7 +5,11 @@ products:
 params:
   - preset: vehicle-base
   - name: timeout
+  - name: streaming
+    type: bool
+    default: false
 render: |
   type: skoda
   {{ include "vehicle-base" . }}
   timeout: {{ .timeout }}
+  streaming: {{ .streaming }}
