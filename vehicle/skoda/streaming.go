@@ -164,19 +164,28 @@ func (c *MqttConnector) runMqtt(userID string, token *oauth2.Token, totp string)
 		Password:     []byte(token.AccessToken),
 		PasswordFlag: true,
 		Properties: &paho.ConnectProperties{
-			AuthMethod: "totp_v1",
-			AuthData:   []byte(totp),
+			User: paho.UserProperties{
+				{Key: "auth_method", Value: "totp_v1"},
+				{Key: "auth_credentials", Value: totp},
+			},
 		},
 	}
 
 	connack, err := client.Connect(ctx, cp)
 	if err != nil {
 		conn.Close()
+		if connack != nil {
+			return fmt.Errorf("mqtt connect: reason=%d: %w", connack.ReasonCode, err)
+		}
 		return fmt.Errorf("mqtt connect: %w", err)
 	}
 	if connack.ReasonCode != 0 {
 		conn.Close()
-		return fmt.Errorf("mqtt connect rejected: reason=%d", connack.ReasonCode)
+		reason := ""
+		if connack.Properties != nil {
+			reason = connack.Properties.ReasonString
+		}
+		return fmt.Errorf("mqtt connect rejected: reason=%d %s", connack.ReasonCode, reason)
 	}
 
 	c.setConnected(true)
