@@ -36,7 +36,7 @@ const (
 	fcmServerKey       = "BDOU99-h67HcA6JeFXHbSNMu7e2yNNu3RzoMj8TM4W88jITfq7ZmPvIM1Iv-4_l2LxQcYwhqby2xGpWwzjfAnG4"
 	fcmAuthVersion     = "FIS_v2"
 	fcmSDKVersion      = "w:0.6.17"
-	gcmChromeVersion   = "94.0.4606.51"
+	gcmChromeVersion   = "63.0.3234.0"
 )
 
 // FCMCredentials contains all persisted FCM registration data.
@@ -169,8 +169,7 @@ func (c *FCMClient) gcmCheckinWithID(ctx context.Context, androidID, securityTok
 		return 0, 0, err
 	}
 	httpReq.Header.Set("Content-Type", "application/x-protobuf")
-	httpReq.Header.Set("X-Android-Package", firebaseAndroidPackage)
-	httpReq.Header.Set("X-Android-Cert", firebaseAndroidCert)
+	httpReq.Header.Set("User-Agent", "")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -212,8 +211,7 @@ func (c *FCMClient) gcmRegister(ctx context.Context, androidID, securityToken ui
 	}
 	httpReq.Header.Set("Authorization", fmt.Sprintf("AidLogin %d:%d", androidID, securityToken))
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("X-Android-Package", firebaseAndroidPackage)
-	httpReq.Header.Set("X-Android-Cert", firebaseAndroidCert)
+	httpReq.Header.Set("User-Agent", "")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
