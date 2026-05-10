@@ -104,6 +104,25 @@ func (v *API) Action(vin, action, value string) error {
 	return err
 }
 
+// RegisterFCMToken registers an FCM token with the MySkoda notifications API.
+func (v *API) RegisterFCMToken(fcmToken string) error {
+	uri := fmt.Sprintf("%s/v1/notifications-subscriptions/%s", BaseURI, fcmToken)
+	data := struct {
+		DevicePlatform string `json:"devicePlatform"`
+		AppVersion     string `json:"appVersion"`
+		Language       string `json:"language"`
+	}{
+		DevicePlatform: "ANDROID",
+		AppVersion:     myskodaAppVersion,
+		Language:       "en",
+	}
+	req, err := request.New(http.MethodPut, uri, request.MarshalJSON(data), request.JSONEncoding)
+	if err == nil {
+		_, err = v.DoBody(req)
+	}
+	return err
+}
+
 func (v *API) WakeUp(vin string) error {
 	// @POST("api/v1/vehicle-wakeup/{vin}")
 	uri := fmt.Sprintf("%s/v1/vehicle-wakeup/%s", BaseURI, vin)

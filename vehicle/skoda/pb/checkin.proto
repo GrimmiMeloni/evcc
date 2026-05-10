@@ -1,0 +1,28 @@
+syntax = "proto2";
+
+package skoda;
+option go_package = "github.com/evcc-io/evcc/vehicle/skoda/pb";
+
+message ChromeBuildProto {
+    optional int32 platform = 1;
+    optional string chrome_version = 2;
+    optional int32 channel = 3;
+}
+
+message AndroidCheckinProto {
+    optional int32 type = 12;
+    optional ChromeBuildProto chrome_build = 6;
+}
+
+message AndroidCheckinRequest {
+    optional fixed64 id = 1;
+    optional int32 user_serial_number = 2;
+    optional AndroidCheckinProto checkin = 4;
+    optional fixed64 security_token = 5;
+    optional int32 version = 6;
+}
+
+message AndroidCheckinResponse {
+    optional fixed64 android_id = 7;
+    optional fixed64 security_token = 8;
+}
