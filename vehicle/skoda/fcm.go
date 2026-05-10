@@ -152,7 +152,8 @@ func (c *FCMClient) gcmCheckinWithID(ctx context.Context, androidID, securityTok
 	}
 
 	if androidID != 0 {
-		req.Id = &androidID
+		id := int64(androidID)
+		req.Id = &id
 		req.SecurityToken = &securityToken
 	}
 

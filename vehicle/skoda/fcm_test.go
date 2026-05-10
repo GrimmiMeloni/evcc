@@ -271,7 +271,7 @@ func TestProtobufRoundTrip(t *testing.T) {
 	}
 
 	// Test with android_id and security_token
-	androidID := uint64(12345)
+	androidID := int64(12345)
 	secToken := uint64(67890)
 	req.Id = &androidID
 	req.SecurityToken = &secToken

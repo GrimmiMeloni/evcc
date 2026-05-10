@@ -15,11 +15,11 @@ message AndroidCheckinProto {
 }
 
 message AndroidCheckinRequest {
-    optional fixed64 id = 1;
-    optional int32 user_serial_number = 2;
+    optional int64 id = 2;
     optional AndroidCheckinProto checkin = 4;
-    optional fixed64 security_token = 5;
-    optional int32 version = 6;
+    optional fixed64 security_token = 13;
+    optional int32 version = 14;
+    optional int32 user_serial_number = 30;
 }
 
 message AndroidCheckinResponse {
