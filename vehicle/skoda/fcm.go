@@ -340,7 +340,7 @@ func (c *FCMClient) fcmRegister(ctx context.Context, gcmToken, authToken string)
 	httpReq.Header.Set("x-goog-api-key", firebaseAPIKey)
 	httpReq.Header.Set("X-Android-Package", firebaseAndroidPackage)
 	httpReq.Header.Set("X-Android-Cert", firebaseAndroidCert)
-	httpReq.Header.Set("x-goog-firebase-installations-auth", fmt.Sprintf("FIS %s", authToken))
+	httpReq.Header.Set("x-goog-firebase-installations-auth", authToken)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
