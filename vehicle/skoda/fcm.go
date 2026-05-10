@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	firebaseProjectID = "678067506455"
-	firebaseAppID     = "1:678067506455:android:4afca86c91d6d4c235bb52"
-	firebaseAPIKey    = "AIzaSyBlJdDfVR6ltRhKpA87F3SmCe2hHqhyEd8"
-	myskodaAppVersion = "8.11.0"
+	firebaseProjectID      = "678067506455"
+	firebaseAppID          = "1:678067506455:android:4afca86c91d6d4c235bb52"
+	firebaseAPIKey         = "AIzaSyBlJdDfVR6ltRhKpA87F3SmCe2hHqhyEd8"
+	firebaseAndroidPackage = "cz.skodaauto.myskoda"
+	firebaseAndroidCert    = "E567A2E2E6C5E889CDB37EF07EBEC1576C196325"
+	myskodaAppVersion      = "8.11.0"
 
 	gcmCheckinURL      = "https://android.clients.google.com/checkin"
 	gcmRegisterURL     = "https://android.clients.google.com/c2dm/register3"
@@ -262,6 +264,8 @@ func (c *FCMClient) fcmInstall(ctx context.Context) (string, string, error) {
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-goog-api-key", firebaseAPIKey)
+	httpReq.Header.Set("X-Android-Package", firebaseAndroidPackage)
+	httpReq.Header.Set("X-Android-Cert", firebaseAndroidCert)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -332,6 +336,8 @@ func (c *FCMClient) fcmRegister(ctx context.Context, gcmToken, authToken string)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-goog-api-key", firebaseAPIKey)
+	httpReq.Header.Set("X-Android-Package", firebaseAndroidPackage)
+	httpReq.Header.Set("X-Android-Cert", firebaseAndroidCert)
 	httpReq.Header.Set("x-goog-firebase-installations-auth", fmt.Sprintf("FIS %s", authToken))
 
 	resp, err := c.httpClient.Do(httpReq)
