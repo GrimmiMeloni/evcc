@@ -55,6 +55,19 @@ func TestOptimizerHorizon(t *testing.T) {
 	assert.Equal(t, 8, slotsUntil(rates, horizon, 8))
 }
 
+func TestFeedInRatesWithoutTariff(t *testing.T) {
+	start := time.Now().Truncate(tariff.SlotDuration)
+	grid := api.Rates{
+		{Start: start, End: start.Add(tariff.SlotDuration), Value: 0.3},
+		{Start: start.Add(tariff.SlotDuration), End: start.Add(2 * tariff.SlotDuration), Value: 0.2},
+	}
+
+	assert.Equal(t, api.Rates{
+		{Start: grid[0].Start, End: grid[0].End},
+		{Start: grid[1].Start, End: grid[1].End},
+	}, feedInRates(nil, grid))
+}
+
 func TestApplyPrecondition(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -392,6 +405,19 @@ func TestBatteryRequestGridModes(t *testing.T) {
 	assert.False(t, req.DischargeToGrid, "grid discharge requires the opt-in")
 }
 
+// Batteries without soc limits must still get the full capacity as SMax, otherwise the
+// optimizer treats any charge as exceeding the limit and never charges the battery.
+func TestBatteryRequestWithoutSocLimiter(t *testing.T) {
+	site := &Site{log: util.NewLogger("foo")}
+	capacity, soc := 10.0, 50.0
+	dev := config.NewStaticDevice(config.Named{}, api.Meter(&struct{ api.Meter }{}))
+
+	req, _ := site.batteryRequest(dev, types.Measurement{Capacity: &capacity, Soc: &soc}, nil, 8, 15*time.Minute)
+
+	assert.Equal(t, float32(0), req.SMin)
+	assert.Equal(t, float32(10000), req.SMax)
+}
+
 // TestBatteryRequestSocLimitsClamp ensures the reported soc is always clamped into
 // the resulting [SMin, SMax] range, even when it lies outside the configured soc
 // limits (e.g. right after a firmware update changed the reported soc or the min/max
@@ -605,17 +631,6 @@ func TestBlendMeasured(t *testing.T) {
 	short := []float32{100, 100}
 	blendMeasured(short, 200, 4)
 	assert.Equal(t, []float32{200, 175}, short)
-}
-
-func TestBlendScale(t *testing.T) {
-	slots := []float32{100, 100, 100, 100, 100, 100}
-	blendScale(slots, 2, 4)
-	assert.Equal(t, []float32{200, 175, 150, 125, 100, 100}, slots)
-
-	// fewer slots than decay length
-	short := []float64{100, 100}
-	blendScale(short, 0.5, 4)
-	assert.Equal(t, []float64{50, 62.5}, short)
 }
 
 func TestCurrentSlotSuggestion(t *testing.T) {

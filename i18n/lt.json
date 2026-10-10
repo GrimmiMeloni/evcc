@@ -343,7 +343,7 @@
       "customOption": "Vartotojo apibrėžtas įrenginys",
       "delete": "Ištrinti",
       "disable": "Išjungti",
-      "disabled": "Išjungta",
+      "disabled": "išjungta",
       "dismiss": "Atmesti",
       "docsLink": "Žiūrėkite dokumentaciją.",
       "dragHandle": "Vilkti",
@@ -790,7 +790,7 @@
     "optimizer": {
       "description": "Analizuoja saulės energijos prognozę, elektros energijos kainas ir jūsų vartojimo įpročius, kad optimizuotų kaupiklį ir įkrovimo strategiją. Duomenys siunčiami apdorojimui į evcc optimizavimo paslaugą. Šiuo metu tik apskaičiuoja ir vizualizuoja, įrenginių kol kas nevaldo.",
       "enable": "Įjungti Optimizavimą",
-      "info": "Gali užtrukti kelias minutes, kol meniu pasirodys optimizatoriaus eilutė. Naujoms evcc instaliacijoms gali užtrukti iki 24 valandų, kol evcc turės pakankamai duomenų veikimui.",
+      "info": "Naujoms instaliacijoms gali užtrukti iki 24 valandų, kol evcc turės pakankamai duomenų.",
       "title": "Optimizavimas"
     },
     "options": {
@@ -1230,8 +1230,36 @@
     "restartDescription": "Ar pabandėte išjungti ir vėl įjungti?",
     "secondaryActions": "Vis dar nepavyksta išspręsti problemos? Čia rasite sudėtingesnes opcijas."
   },
+  "energy": {
+    "direction": {
+      "battery": {
+        "energy": "įkrauta",
+        "returnEnergy": "iškrauta"
+      },
+      "grid": {
+        "energy": "iš tinklo",
+        "returnEnergy": "į tinklą"
+      },
+      "meter": {
+        "energy": "Energija iš tinklo",
+        "returnEnergy": "Energija (patiekta į tinklą)"
+      }
+    },
+    "group": {
+      "battery": "Kaupiklis",
+      "consumer": "Vartojimas",
+      "forecast": "Prognozė",
+      "grid": "Tinklas",
+      "loadpoint": "Įkrovimas ir Šildymas",
+      "meter": "Papildomi skaitikliai",
+      "pv": "Gamyba"
+    }
+  },
   "issue": {
     "additional": {
+      "copied": "nukopijuota!",
+      "copy": "kopijuoti",
+      "copySelected": "kopijuoti pasirinktus",
       "description": "Įtraukite konfigūraciją ir žurnalus, kad galėtume greitai atkartoti problemą. Raginame kuo daugiau dalytis. Paprastai nereikia nurodyti būsenos.",
       "include": "įtraukti",
       "lines": "eilutės",
@@ -1314,7 +1342,7 @@
   "main": {
     "alwaysCharge": {
       "description": "be pertraukimų",
-      "label": "Visada krauti",
+      "label": "Nuolat įkraukti",
       "labelHeating": "Visada šildyti",
       "minCurrent": "min {current}",
       "once": "iki sesijos pabaigos",
@@ -1404,35 +1432,6 @@
       "feedIn": "Atidavimas į tinklą",
       "title": "Išorinis ribojimas aktyvuotas"
     },
-    "history": {
-      "direction": {
-        "battery": {
-          "energy": "įkrauta",
-          "returnEnergy": "iškrauta"
-        },
-        "grid": {
-          "energy": "iš tinklo",
-          "returnEnergy": "į tinklą"
-        },
-        "meter": {
-          "energy": "Energija iš tinklo",
-          "returnEnergy": "Energija (patiekta į tinklą)"
-        }
-      },
-      "download": "Atsisiųsti",
-      "empty": "Šio laikotarpio istorijos duomenų nėra.",
-      "group": {
-        "battery": "Kaupiklis",
-        "consumer": "Vartojimas",
-        "forecast": "Prognozė",
-        "grid": "Tinklas",
-        "loadpoint": "Įkrovimas ir Šildymas",
-        "meter": "Papildomi skaitikliai",
-        "pv": "Gamyba"
-      },
-      "otherConsumers": "Kiti",
-      "title": "Istorija"
-    },
     "loadpoint": {
       "avgPrice": "⌀ Kaina",
       "charged": "Įkrauta",
@@ -1515,7 +1514,7 @@
       "minpv": "Min+Saulė",
       "normal": "Normalus",
       "now": "Greitas",
-      "off": "Stop",
+      "off": "Išjungta",
       "on": "Įjungta",
       "pv": "Saulė",
       "smart": "Išmanus"
